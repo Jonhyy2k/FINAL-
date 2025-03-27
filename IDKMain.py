@@ -15,10 +15,10 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.linear_model import LinearRegression
 from hmmlearn import hmm
-#from tensorflow.keras.models import Sequential, Model
-#from tensorflow.keras.layers import Dense, LSTM, Dropout, Input, GRU, BatchNormalization, Bidirectional
-#from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
-#from tensorflow.keras.optimizers import Adam
+# from tensorflow.keras.models import Sequential, Model
+# from tensorflow.keras.layers import Dense, LSTM, Dropout, Input, GRU, BatchNormalization, Bidirectional
+# from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+# from tensorflow.keras.optimizers import Adam
 import scipy.stats as stats
 import tensorflow
 from tensorflow import keras
@@ -26,6 +26,7 @@ from keras.models import Sequential, Model
 from keras.layers import Dense, LSTM, Dropout, Input, GRU, BatchNormalization, Bidirectional, Conv1D
 from keras.optimizers import Adam
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau
+
 warnings.filterwarnings('ignore')
 
 # Enable TensorFlow GPU support and log device placement
@@ -39,13 +40,14 @@ else:
     print("[WARNING] No GPU found, using CPU instead")
 
 # Alpha Vantage API key
-#ALPHA_VANTAGE_API_KEY = "73KWO176IRABCOCJ"
+# ALPHA_VANTAGE_API_KEY = "73KWO176IRABCOCJ"
 ALPHA_VANTAGE_API_KEY = "FAD56FMDCHAL8V1T"
 
 # Output file
 OUTPUT_FILE = "STOCK_ANALYSIS_RESULTS.txt"
 
 from alpha_vantage_client import AlphaVantageClient
+
 
 def calculate_sigma(data):
     """Calculate comprehensive sigma metric using log returns-based mean reversion"""
@@ -66,15 +68,18 @@ def calculate_sigma(data):
 
         # 3. Calculate mean reversion half-life using log returns
         half_life_info = calculate_mean_reversion_half_life(indicators_df)
-        print(f"[INFO] Mean reversion half-life: {half_life_info['half_life']:.1f} days - {half_life_info['mean_reversion_speed']} (beta: {half_life_info.get('beta', 0):.3f})")
+        print(
+            f"[INFO] Mean reversion half-life: {half_life_info['half_life']:.1f} days - {half_life_info['mean_reversion_speed']} (beta: {half_life_info.get('beta', 0):.3f})")
 
         # 4. Analyze volatility regimes with log returns
         vol_data = analyze_volatility_regimes(indicators_df)
-        print(f"[INFO] Volatility regime: {vol_data['vol_regime']} (Term structure: {vol_data['vol_term_structure']:.2f}, Persistence: {vol_data.get('vol_persistence', 0):.2f})")
+        print(
+            f"[INFO] Volatility regime: {vol_data['vol_regime']} (Term structure: {vol_data['vol_term_structure']:.2f}, Persistence: {vol_data.get('vol_persistence', 0):.2f})")
 
         # 5. Detect market regime with log returns
         market_regime = detect_market_regime(indicators_df)
-        print(f"[INFO] Market regime: {market_regime['current_regime']} (Duration: {market_regime['regime_duration']} days)")
+        print(
+            f"[INFO] Market regime: {market_regime['current_regime']} (Duration: {market_regime['regime_duration']} days)")
 
         # 6. Apply PCA to reduce feature dimensionality
         pca_results = None
@@ -119,7 +124,9 @@ def calculate_sigma(data):
 
         # MOMENTUM INDICATORS
         # Prefer log volatility if available for more statistical robustness
-        traditional_volatility = indicators_df['log_volatility'].iloc[-1] if 'log_volatility' in indicators_df.columns else indicators_df['volatility'].iloc[-1] if 'volatility' in indicators_df.columns else 0
+        traditional_volatility = indicators_df['log_volatility'].iloc[
+            -1] if 'log_volatility' in indicators_df.columns else indicators_df['volatility'].iloc[
+            -1] if 'volatility' in indicators_df.columns else 0
 
         rsi = latest['RSI'] if not np.isnan(latest['RSI']) else 50
         rsi_signal = (max(0, min(100, rsi)) - 30) / 70
@@ -310,7 +317,8 @@ def calculate_sigma(data):
 
         # Get recent monthly return using log returns if available
         if 'log_returns' in indicators_df.columns:
-            recent_returns = indicators_df['log_returns'].iloc[-20:].sum()  # Sum log returns for approximate monthly return
+            recent_returns = indicators_df['log_returns'].iloc[
+                             -20:].sum()  # Sum log returns for approximate monthly return
             recent_returns = np.exp(recent_returns) - 1  # Convert to percentage
             print(f"[INFO] Using accumulated log returns for monthly return: {recent_returns:.2%}")
         else:
@@ -358,7 +366,8 @@ def calculate_sigma(data):
             # Gradually increase mean reversion weight for higher recent returns
             excess_return_factor = min(0.3, (recent_returns - 0.15) * 2)  # Up to 0.3 extra weight
             balance_factor = base_balance_factor + excess_return_factor
-            print(f"[INFO] Increasing mean reversion weight by {excess_return_factor:.2f} due to high recent returns ({recent_returns:.1%})")
+            print(
+                f"[INFO] Increasing mean reversion weight by {excess_return_factor:.2f} due to high recent returns ({recent_returns:.1%})")
         elif recent_returns < -0.15:  # <-15% monthly returns (big drop)
             # For big drops, slightly reduce mean reversion weight (they've already reverted)
             balance_factor = max(0.3, base_balance_factor - 0.1)
@@ -385,7 +394,8 @@ def calculate_sigma(data):
         elif vol_persistence < 0.7:  # Low volatility persistence
             # In low persistence regimes, weight is more neutral
             balance_factor = (balance_factor + 0.5) / 2  # Move closer to 0.5
-            print(f"[INFO] Adjusting balance factor toward neutral due to low volatility persistence: {vol_persistence:.2f}")
+            print(
+                f"[INFO] Adjusting balance factor toward neutral due to low volatility persistence: {vol_persistence:.2f}")
 
         # Ensure balance factor is reasonable
         balance_factor = max(0.2, min(0.8, balance_factor))
@@ -427,7 +437,8 @@ def calculate_sigma(data):
         # Ensure sigma is between 0 and 1
         final_sigma = max(0, min(1, final_sigma))
 
-        print(f"[INFO] Final components: Momentum={momentum_score:.3f}, Reversion={reversion_score:.3f}, Balance={balance_factor:.2f}, Sigma={sigma:.3f}, Final Sigma={final_sigma:.3f}")
+        print(
+            f"[INFO] Final components: Momentum={momentum_score:.3f}, Reversion={reversion_score:.3f}, Balance={balance_factor:.2f}, Sigma={sigma:.3f}, Final Sigma={final_sigma:.3f}")
 
         # Analysis details
         analysis_details = {
@@ -464,6 +475,7 @@ def calculate_sigma(data):
         print(f"[ERROR] Error calculating balanced Sigma with log returns: {e}")
         traceback.print_exc()
         return None
+
 
 # Enhanced technical indicators with log returns mean reversion components
 def calculate_technical_indicators(data):
@@ -634,7 +646,7 @@ def calculate_technical_indicators(data):
         # 14. Chaikin Money Flow (CMF)
         if 'volume' in df.columns:
             money_flow_multiplier = ((df['4. close'] - df['low']) - (df['high'] - df['4. close'])) / (
-                        df['high'] - df['low'])
+                    df['high'] - df['low'])
             money_flow_volume = money_flow_multiplier * df['volume']
             df['CMF'] = money_flow_volume.rolling(20).sum() / df['volume'].rolling(20).sum()
         else:
@@ -691,7 +703,7 @@ def calculate_technical_indicators(data):
                 return 0
             x = x.dropna()
             return pd.Series(x).autocorr(lag=lag)
-        
+
         df['log_autocorr_5'] = df['log_returns'].rolling(30).apply(
             lambda x: autocorr(x, lag=5),
             raw=False
@@ -734,6 +746,7 @@ def calculate_technical_indicators(data):
         print(f"[ERROR] Error calculating enhanced technical indicators: {e}")
         traceback.print_exc()
         return None
+
 
 # Improved Hurst Exponent calculation using log returns
 def calculate_hurst_exponent(df, max_lag=120, use_log_returns=True):
@@ -790,6 +803,7 @@ def calculate_hurst_exponent(df, max_lag=120, use_log_returns=True):
     except Exception as e:
         print(f"[ERROR] Error calculating Hurst exponent: {e}")
         return {"hurst": 0.5, "regime": "Unknown"}
+
 
 # Improved Mean Reversion Half-Life using log returns
 def calculate_mean_reversion_half_life(data):
@@ -858,6 +872,7 @@ def calculate_mean_reversion_half_life(data):
         print(f"[ERROR] Error calculating mean reversion half-life: {e}")
         return {"half_life": 0, "mean_reversion_speed": "Unknown", "beta": 0}
 
+
 # Volatility Regime Analysis with log-based improvements
 def analyze_volatility_regimes(data, lookback=252):
     """Implements advanced volatility analysis with log returns for better accuracy"""
@@ -874,7 +889,7 @@ def analyze_volatility_regimes(data, lookback=252):
                     'vol_persistence': 0.5,
                     'vol_regime': "Stable"
                 }
-        
+
         # Handle empty DataFrame
         if data.empty:
             print("[WARNING] Empty DataFrame in analyze_volatility_regimes")
@@ -883,7 +898,7 @@ def analyze_volatility_regimes(data, lookback=252):
                 'vol_persistence': 0.5,
                 'vol_regime': "Stable"
             }
-            
+
         # Use log returns if available for improved statistical properties
         if 'log_returns' in data.columns:
             returns = data['log_returns'].iloc[-lookback:]
@@ -898,10 +913,10 @@ def analyze_volatility_regimes(data, lookback=252):
                 print(f"[WARNING] No price column found in data for volatility regime analysis")
                 # Create synthetic returns for a fallback
                 returns = pd.Series(np.random.normal(0, 0.01, min(lookback, len(data))),
-                                   index=data.index[-min(lookback, len(data)):])
+                                    index=data.index[-min(lookback, len(data)):])
                 print("[INFO] Created synthetic returns for volatility regime analysis")
             else:
-                prices = data[price_col].iloc[-lookback-1:].values
+                prices = data[price_col].iloc[-lookback - 1:].values
                 log_returns = np.diff(np.log(prices))
                 returns = pd.Series(log_returns, index=data.index[-len(log_returns):])
                 print("[INFO] Calculated returns from price data for volatility regime analysis")
@@ -973,6 +988,7 @@ def analyze_volatility_regimes(data, lookback=252):
             "vol_persistence": 0.8
         }
 
+
 # Market Regime Detection with log returns
 def detect_market_regime(data, n_regimes=3):
     """Detect market regimes using Hidden Markov Model on log returns for improved results"""
@@ -996,7 +1012,7 @@ def detect_market_regime(data, n_regimes=3):
                 else:
                     print("[ERROR] No return or price data found for market regime detection")
                     raise ValueError("No return or price data available")
-            
+
             # Fit HMM with fewer iterations for performance
             model = hmm.GaussianHMM(n_components=n_regimes, n_iter=100, random_state=42)
             model.fit(returns)
@@ -1046,6 +1062,7 @@ def detect_market_regime(data, n_regimes=3):
             "regime_duration": 0,
             "regime_volatility": 0
         }
+
 
 # Risk-Adjusted Metrics with log return improvements
 def calculate_risk_adjusted_metrics(df, sigma):
@@ -1143,6 +1160,7 @@ def calculate_risk_adjusted_metrics(df, sigma):
             "risk_adjusted_sigma": sigma
         }
 
+
 # PCA function to reduce dimensionality of features
 def apply_pca(features_df):
     try:
@@ -1208,6 +1226,7 @@ def apply_pca(features_df):
         print(f"[ERROR] PCA failed: {e}")
         traceback.print_exc()
         return None, None
+
 
 # Enhanced data preparation for LSTM prediction with log returns features
 def prepare_lstm_data(data, time_steps=60):
@@ -1334,15 +1353,16 @@ def prepare_lstm_data(data, time_steps=60):
         traceback.print_exc()
         return None, None, None
 
+
 def build_lstm_model(input_shape):
     """
     Build advanced LSTM model with high-performance architecture and attention mechanism
-    
+
     Parameters:
     -----------
     input_shape: tuple
         Input shape for the model (timesteps, features)
-    
+
     Returns:
     --------
     keras.Model
@@ -1355,30 +1375,30 @@ def build_lstm_model(input_shape):
         dense_layers = 5
         dropout_rate = 0.3
         lr = 0.0015
-        
+
         print("[INFO] Building advanced LSTM architecture with attention")
-        
+
         # Create model with functional API
         inputs = Input(shape=input_shape)
-        
+
         # First LSTM layer - bidirectional for better pattern recognition
         x = Bidirectional(LSTM(base_units, return_sequences=True))(inputs)
         x = BatchNormalization()(x)
         x = Dropout(dropout_rate)(x)
-        
+
         # Store first layer output for residual connections
         first_layer_output = x
-        
+
         # Build multiple LSTM layers with diminishing sizes
         for i in range(1, lstm_layers - 1):  # Notice we go up to lstm_layers-1 (save last layer for later)
             # Calculate units for this layer (progressively smaller)
-            layer_units = base_units // (2 ** max(0, i-1))
-            
+            layer_units = base_units // (2 ** max(0, i - 1))
+
             # All intermediate layers return sequences
             x = LSTM(layer_units, return_sequences=True)(x)
             x = BatchNormalization()(x)
             x = Dropout(dropout_rate)(x)
-            
+
             # Add residual connection every 2 layers
             if i % 2 == 0:
                 # Need to match dimensions for residual connection
@@ -1390,24 +1410,24 @@ def build_lstm_model(input_shape):
                     x = tensorflow.keras.layers.add([x, first_layer_output])
                 # Update reference for next residual connection
                 first_layer_output = x
-        
+
         # Final LSTM layer - CRITICAL: keep return_sequences=True for attention
-        layer_units = base_units // (2 ** max(0, lstm_layers-2))
+        layer_units = base_units // (2 ** max(0, lstm_layers - 2))
         x = LSTM(layer_units, return_sequences=True)(x)
         x = BatchNormalization()(x)
         x = Dropout(dropout_rate)(x)
-        
+
         # Self-attention mechanism - properly handling 3D tensors (batch, timesteps, features)
         # Create query and value from the same tensor
         query_value = x
-        
+
         # Apply attention - now working with proper sequence data
         attention_output = tensorflow.keras.layers.Attention()([query_value, query_value])
-        
+
         # Global average pooling to reduce from 3D to 2D
         # This replaces the need for return_sequences=False
         x = tensorflow.keras.layers.GlobalAveragePooling1D()(attention_output)
-        
+
         # Build dense layers with diminishing sizes
         dense_unit_base = 256
         for i in range(dense_layers):
@@ -1415,44 +1435,45 @@ def build_lstm_model(input_shape):
             x = Dense(dense_units, activation='relu')(x)
             x = BatchNormalization()(x)
             x = Dropout(max(0.1, dropout_rate - 0.05 * i))(x)
-        
+
         # Output layer
         outputs = Dense(1)(x)
-        
+
         # Create model
         model = Model(inputs=inputs, outputs=outputs)
-        
+
         # Configure optimizer with advanced settings
         optimizer = Adam(learning_rate=lr, amsgrad=True, beta_1=0.9, beta_2=0.999)
-        
+
         # Use Huber loss for robustness to outliers
         loss = "huber" if hasattr(tensorflow.keras.losses, "Huber") else "huber_loss"
-        
+
         # Compile model
         model.compile(optimizer=optimizer, loss=loss)
-        
+
         # Report model details
         total_params = model.count_params()
         print(f"[INFO] Built advanced LSTM model with attention mechanism, {total_params:,} parameters")
         print(f"[INFO] Architecture: {lstm_layers} LSTM layers, {dense_layers} dense layers, {base_units} base units")
-        
+
         return model
-        
+
     except Exception as e:
         print(f"[ERROR] Error building advanced LSTM model with attention: {e}")
         import traceback
         traceback.print_exc()
         return None
 
+
 # Enhanced LSTM model training and prediction with extended processing time
 def predict_with_lstm(data):
     try:
         # Set a maximum execution time - significantly increased for thorough training
-        max_execution_time = 900 # 15 minutes max (increased from 2 minutes)
+        max_execution_time = 900  # 15 minutes max (increased from 2 minutes)
         start_time = time.time()
 
         ## Check for GPU availability
-        #try:
+        # try:
         #    gpu_available = len(tensorflow.config.list_physical_devices('GPU')) > 0
         #    if gpu_available:
         #        print("[INFO] Using GPU acceleration for LSTM training")
@@ -1460,7 +1481,7 @@ def predict_with_lstm(data):
         #        tensorflow.config.optimizer.set_jit(True)  # Enable XLA optimization
         #    else:
         #        print("[INFO] Using CPU for LSTM training - no GPU detected")
-        #except Exception as e:
+        # except Exception as e:
         #    # Handle case where TensorFlow GPU check fails
         #    print(f"[WARNING] Error checking GPU availability: {e}")
         #    print("[INFO] Continuing with CPU-only mode for LSTM training")
@@ -1607,12 +1628,13 @@ def predict_with_lstm(data):
         traceback.print_exc()
         return 0
 
+
 # Enhanced DQN Agent implementation for more accurate predictions
 class DQNAgent:
     def __init__(self, action_size=3):
         """
         Initialize a DQN agent with dynamic model building
-        
+
         Parameters:
         -----------
         action_size: int
@@ -1625,32 +1647,32 @@ class DQNAgent:
         self.epsilon = 1.0  # Exploration rate
         self.epsilon_min = 0.03  # Minimum exploration probability
         self.epsilon_decay = 0.97  # Exploration decay rate
-        
+
         # Models will be built dynamically
         self.model = None
         self.target_model = None
         self.state_size = None
-        
+
         # Training parameters
         self.target_update_counter = 0
         self.target_update_freq = 5
         self.max_training_time = 120  # 2 minutes maximum for training
         self.batch_history = []
-        
+
         # Track start time for timeout purposes
         self.training_start_time = None
-        
+
         print("[INFO] DQN agent initialized with dynamic model building")
-    
+
     def _build_model(self, input_shape):
         """
         Build model based on actual input shape
-        
+
         Parameters:
         -----------
         input_shape: int
             Number of input features
-            
+
         Returns:
         --------
         keras.Model or None
@@ -1658,7 +1680,7 @@ class DQNAgent:
         """
         self.state_size = input_shape
         print(f"[INFO] Building DQN model with input shape: {input_shape}")
-        
+
         try:
             # Create model with proper input shape
             model = Sequential([
@@ -1668,10 +1690,10 @@ class DQNAgent:
                 Dropout(0.2),
                 Dense(self.action_size, activation='linear')
             ])
-            
+
             # Use a simple optimizer for better compatibility
             model.compile(optimizer='adam', loss='mse')
-            
+
             # Report model size
             print(f"[INFO] Built DQN model with {model.count_params():,} parameters")
             return model
@@ -1679,11 +1701,11 @@ class DQNAgent:
             print(f"[ERROR] Failed to build DQN model: {e}")
             traceback.print_exc()
             return None
-    
+
     def ensure_model_built(self, state):
         """
         Make sure model is built with correct shape before use
-        
+
         Parameters:
         -----------
         state: numpy.ndarray
@@ -1697,7 +1719,7 @@ class DQNAgent:
             else:
                 # Single state (e.g., [features])
                 input_shape = state.shape[0]
-            
+
             if self.model is None:
                 # Initial model build
                 self.model = self._build_model(input_shape)
@@ -1714,16 +1736,16 @@ class DQNAgent:
         except Exception as e:
             print(f"[ERROR] Error ensuring model is built: {e}")
             traceback.print_exc()
-    
+
     def act(self, state):
         """
         Select an action based on the current state
-        
+
         Parameters:
         -----------
         state: numpy.ndarray
             Current state observation
-            
+
         Returns:
         --------
         int
@@ -1733,18 +1755,18 @@ class DQNAgent:
             # Reshape state if necessary
             if len(state.shape) == 1:
                 state = state.reshape(1, -1)
-                
+
             # Make sure model is built before using it
             self.ensure_model_built(state)
-            
+
             if self.model is None:
                 # Model building failed, return random action
                 return random.randrange(self.action_size)
-                
+
             # Epsilon-greedy action selection
             if np.random.rand() <= self.epsilon:
                 return random.randrange(self.action_size)
-            
+
             # Use multiple predictions with noise for more stable selection
             try:
                 # Get action values
@@ -1755,16 +1777,16 @@ class DQNAgent:
             except Exception as e:
                 print(f"[WARNING] Error predicting action: {e}")
                 return random.randrange(self.action_size)
-                
+
         except Exception as e:
             print(f"[ERROR] Error in DQN act method: {e}")
             traceback.print_exc()
             return random.randrange(self.action_size)
-    
+
     def remember(self, state, action, reward, next_state, done):
         """
         Store experience in replay memory
-        
+
         Parameters:
         -----------
         state: numpy.ndarray
@@ -1783,16 +1805,16 @@ class DQNAgent:
             state = state.reshape(1, -1)
         if len(next_state.shape) == 1:
             next_state = next_state.reshape(1, -1)
-            
+
         # Only add to memory if not full
         if len(self.memory) < self.memory.maxlen:
             # Convert to numpy arrays to ensure consistency
             state = np.array(state, dtype=np.float32)
             next_state = np.array(next_state, dtype=np.float32)
-            
+
             # Store experience tuple
             self.memory.append((state, action, reward, next_state, done))
-    
+
     def update_target_model(self):
         """Update target model with weights from the main model"""
         if self.model is not None and self.target_model is not None:
@@ -1801,11 +1823,11 @@ class DQNAgent:
                 print("[DEBUG] DQN target model updated")
             except Exception as e:
                 print(f"[ERROR] Failed to update target model: {e}")
-    
+
     def replay(self, batch_size):
         """
         Train the model using experience replay
-        
+
         Parameters:
         -----------
         batch_size: int
@@ -1823,18 +1845,18 @@ class DQNAgent:
             if time.time() - self.training_start_time > self.max_training_time:
                 print("[WARNING] DQN training timeout reached")
                 return
-                
+
             # Get random sample of experiences
             minibatch = random.sample(self.memory, batch_size)
-            
+
             # Ensure all states in the batch have the same shape
             state_shapes = set(tuple(x[0].shape) for x in minibatch)
             next_state_shapes = set(tuple(x[3].shape) for x in minibatch)
-            
+
             if len(state_shapes) > 1 or len(next_state_shapes) > 1:
                 print(f"[WARNING] Mixed state shapes in batch: {state_shapes}, {next_state_shapes}, skipping training")
                 return
-                
+
             # Process batch data
             try:
                 states = np.vstack([x[0] for x in minibatch])
@@ -1845,21 +1867,21 @@ class DQNAgent:
             except Exception as e:
                 print(f"[ERROR] Error stacking batch data: {e}")
                 return
-            
+
             # Make sure model matches input shape
             self.ensure_model_built(states)
-            
+
             if self.model is None or self.target_model is None:
                 return
-            
+
             # Get current Q values and target Q values
             try:
                 # Current Q values
                 targets = self.model.predict(states, verbose=0)
-                
+
                 # Get next Q values from target model for stability
                 next_q_values = self.target_model.predict(next_states, verbose=0)
-                
+
                 # Update Q values using the Bellman equation
                 for i in range(len(minibatch)):
                     if dones[i]:
@@ -1868,7 +1890,7 @@ class DQNAgent:
                         # Add small noise to next Q-values for exploration
                         next_qs = next_q_values[i] + np.random.normal(0, 0.01, size=next_q_values[i].shape)
                         targets[i, actions[i]] = rewards[i] + self.gamma * np.max(next_qs)
-                
+
                 # Train the model
                 history = self.model.fit(
                     states,
@@ -1877,46 +1899,46 @@ class DQNAgent:
                     batch_size=min(32, len(minibatch)),  # Smaller batches for stability
                     verbose=0
                 )
-                
+
                 # Track training progress
                 self.batch_history.append(history.history['loss'][-1])
-                
+
                 # Update epsilon with a more gradual decay
                 if self.epsilon > self.epsilon_min:
                     # Adaptive decay based on memory size
                     decay_rate = self.epsilon_decay + (0.01 * min(1.0, len(self.memory) / 5000))
                     self.epsilon *= decay_rate
                     self.epsilon = max(self.epsilon, self.epsilon_min)  # Ensure we don't go below min
-                
+
                 # Update target network periodically
                 self.target_update_counter += 1
                 if self.target_update_counter >= self.target_update_freq:
                     self.update_target_model()
                     self.target_update_counter = 0
-                
+
                 # Report training progress
                 if self.batch_history:
                     recent_losses = self.batch_history[-min(10, len(self.batch_history)):]
                     avg_loss = sum(recent_losses) / len(recent_losses)
                     print(f"[DEBUG] DQN training - avg loss: {avg_loss:.5f}, epsilon: {self.epsilon:.3f}")
-            
+
             except Exception as e:
                 print(f"[ERROR] Error during model training: {e}")
                 traceback.print_exc()
-        
+
         except Exception as e:
             print(f"[ERROR] Error in DQN replay: {e}")
             traceback.print_exc()
-    
+
     def get_recommendation(self, state):
         """
         Get recommendation score (0-1) based on current state
-        
+
         Parameters:
         -----------
         state: numpy.ndarray
             Current state to evaluate
-            
+
         Returns:
         --------
         float
@@ -1926,34 +1948,35 @@ class DQNAgent:
             # Reshape state if necessary
             if len(state.shape) == 1:
                 state = state.reshape(1, -1)
-                
+
             # Ensure model is built
             self.ensure_model_built(state)
-            
+
             if self.model is None:
                 return 0.5  # Neutral recommendation if model failed
-                
+
             # Get action values
             action_values = self.model.predict(state, verbose=0)[0]
-            
+
             # Convert to probabilities using softmax
             exp_values = np.exp(action_values - np.max(action_values))
             probs = exp_values / np.sum(exp_values)
-            
+
             # Calculate recommendation score (0=Sell, 0.5=Hold, 1=Buy)
             # Assuming 3 actions where index 0=Sell, 1=Hold, 2=Buy
             recommendation = 0.0 * probs[0] + 0.5 * probs[1] + 1.0 * probs[2]
-            
+
             # Ensure score is between 0 and 1
             recommendation = max(0.0, min(1.0, recommendation))
-            
+
             print(f"[INFO] DQN recommendation score: {recommendation:.3f} (action probs: {probs})")
             return recommendation
-            
+
         except Exception as e:
             print(f"[ERROR] Error generating DQN recommendation: {e}")
             traceback.print_exc()
             return 0.5  # Neutral score on failure
+
 
 # Enhanced DQN recommendation with log returns features
 def get_dqn_recommendation(data):
@@ -2000,7 +2023,7 @@ def get_dqn_recommendation(data):
 
         # Stack all features into the state
         features = [np.nan_to_num(f, nan=0.0) for f in features]  # Handle NaNs
-        
+
         if len(features) > 0:
             current_state = np.concatenate(features)
         else:
@@ -2034,7 +2057,7 @@ def get_dqn_recommendation(data):
             try:
                 # Your feature extraction code for historical data points
                 past_features = []
-                
+
                 # Same feature extraction as above but for past data
                 if 'log_returns' in data.columns:
                     values = data['log_returns'].values[idx:idx + lookback]
@@ -2043,9 +2066,9 @@ def get_dqn_recommendation(data):
                 elif 'returns' in data.columns:
                     values = data['returns'].values[idx:idx + lookback]
                     past_features.append(np.nan_to_num(values, nan=0.0))
-                
+
                 # Add other features too...
-                
+
                 # Create state vector and next state vector
                 if len(past_features) > 0:
                     state_vector = np.concatenate(past_features)
@@ -2102,29 +2125,30 @@ def get_dqn_recommendation(data):
         if len(agent.memory) > 0:
             print(f"[INFO] Training DQN agent with {len(agent.memory)} experiences...")
             batch_size = min(128, len(agent.memory))
-            
+
             # Number of training iterations based on memory size
             iterations = min(20, len(agent.memory) // 32)
-            
+
             training_start = time.time()
             for _ in range(iterations):
                 if time.time() - function_start_time > max_function_time * 0.75:
                     print("[WARNING] DQN training timeout reached")
                     break
                 agent.replay(batch_size)
-            
+
             print(f"[INFO] DQN training completed in {time.time() - training_start:.1f}s")
 
         # Get final recommendation using the new get_recommendation method
         recommendation = agent.get_recommendation(current_state)
-        
+
         return recommendation
 
     except Exception as e:
         print(f"[ERROR] Error in DQN recommendation: {e}")
         traceback.print_exc()
         return 0.5  # Neutral score on failure
-    
+
+
 # Create Ensemble Prediction with log return components
 def create_ensemble_prediction(momentum_score, reversion_score, lstm_prediction, dqn_recommendation,
                                volatility_data, market_regime, hurst_info, mean_reversion_info=None):
@@ -2222,6 +2246,7 @@ def create_ensemble_prediction(momentum_score, reversion_score, lstm_prediction,
         "ensemble_score": ensemble_score,
         "weights": weights
     }
+
 
 # Calculate sigma for a stock
 # Enhanced sigma recommendation function with rich context
@@ -2322,11 +2347,12 @@ def get_sigma_recommendation(sigma, analysis_details):
 
     return recommendation
 
+
 # Generate price predictions based on analysis results
 def generate_price_predictions(data, analysis_details, forecast_days=60, num_paths=100):
     """
     Generate price predictions based on analysis results with GPU acceleration
-    
+
     Parameters:
     -----------
     data: pandas DataFrame
@@ -2337,7 +2363,7 @@ def generate_price_predictions(data, analysis_details, forecast_days=60, num_pat
         Number of days to forecast
     num_paths: int
         Number of Monte Carlo simulation paths
-        
+
     Returns:
     --------
     dict
@@ -2347,7 +2373,7 @@ def generate_price_predictions(data, analysis_details, forecast_days=60, num_pat
         # Get current price
         price_col = 'close' if 'close' in data.columns else '4. close'
         current_price = data[price_col].iloc[-1]
-        
+
         # Extract key factors from analysis - vectorized for efficiency
         analysis_factors = {
             'sigma': analysis_details.get('sigma', 0.5),
@@ -2357,7 +2383,7 @@ def generate_price_predictions(data, analysis_details, forecast_days=60, num_pat
             'market_regime': analysis_details.get("market_regime", "Unknown"),
             'volatility_regime': analysis_details.get("volatility_regime", "Stable")
         }
-        
+
         # Efficient volatility calculation with vectorized operations
         if 'log_volatility' in data.columns:
             hist_volatility = data['log_volatility'].iloc[-30:].mean() * np.sqrt(252)
@@ -2373,7 +2399,7 @@ def generate_price_predictions(data, analysis_details, forecast_days=60, num_pat
             log_returns[valid_indices + 1] = np.log(price_array[valid_indices + 1] / price_array[valid_indices])
             hist_volatility = np.std(log_returns[-30:]) * np.sqrt(252)
             print(f"[INFO] Estimated volatility for prediction bands with vectorized calc: {hist_volatility:.4f}")
-        
+
         # Adjust volatility based on volatility regime - use dictionary mapping
         vol_multipliers = {
             "Rising": 1.3,
@@ -2382,10 +2408,10 @@ def generate_price_predictions(data, analysis_details, forecast_days=60, num_pat
         }
         vol_multiplier = vol_multipliers.get(analysis_factors['volatility_regime'], 1.0)
         adjusted_volatility = hist_volatility * vol_multiplier
-        
+
         # Calculate expected return based on sigma - vectorized calculation
         expected_annual_return = (analysis_factors['sigma'] - 0.5) * 0.5  # -25% to +25% annual return
-        
+
         # Adjust based on market regime - use dictionary mapping
         regime_multipliers = {
             "Bull": 1.2,
@@ -2395,77 +2421,80 @@ def generate_price_predictions(data, analysis_details, forecast_days=60, num_pat
         regime_type = next((key for key in regime_multipliers if key in analysis_factors['market_regime']), None)
         regime_multiplier = regime_multipliers.get(regime_type, 1.0)
         expected_annual_return *= regime_multiplier
-        
+
         # Calculate daily expected return
-        daily_return = (1 + expected_annual_return) ** (1/252) - 1
-        
+        daily_return = (1 + expected_annual_return) ** (1 / 252) - 1
+
         # Create date range for forecast - vectorized
         last_date = data.index[-1] if isinstance(data.index, pd.DatetimeIndex) else pd.Timestamp.today()
         forecast_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=forecast_days)
-        
+
         # GPU acceleration via TensorFlow if available
         try:
             gpu_available = len(tensorflow.config.list_physical_devices('GPU')) > 0
             if gpu_available:
                 # Use TensorFlow for faster Monte Carlo simulation
                 print("[INFO] Using GPU acceleration for price prediction simulation")
-                
+
                 # Create TensorFlow constants
                 tf_current_price = tensorflow.constant(current_price, dtype=tensorflow.float32)
                 tf_daily_return = tensorflow.constant(daily_return, dtype=tensorflow.float32)
                 tf_daily_vol = tensorflow.constant(adjusted_volatility / np.sqrt(252), dtype=tensorflow.float32)
                 tf_hurst = tensorflow.constant(analysis_factors['hurst_exponent'], dtype=tensorflow.float32)
-                tf_mean_reversion_strength = tensorflow.constant(1.0 - analysis_factors['hurst_exponent'], dtype=tensorflow.float32)
-                
+                tf_mean_reversion_strength = tensorflow.constant(1.0 - analysis_factors['hurst_exponent'],
+                                                                 dtype=tensorflow.float32)
+
                 # Initialize paths tensor
                 price_paths = tensorflow.TensorArray(tensorflow.float32, size=num_paths)
-                
+
                 # Define the simulation step function
                 @tensorflow.function
                 def simulate_path(path_idx):
                     # Initialize path
                     path = tensorflow.TensorArray(tensorflow.float32, size=forecast_days)
-                    
+
                     # Calculate first step with random component
                     random_start = tensorflow.random.normal([1], mean=0, stddev=tf_daily_vol)[0]
                     first_price = tf_current_price * (1 + tf_daily_return + random_start)
                     path = path.write(0, first_price)
-                    
+
                     # Generate the rest of the path
                     for j in range(1, forecast_days):
                         # Get previous price
-                        prev_price = path.read(j-1)
-                        
+                        prev_price = path.read(j - 1)
+
                         # Calculate random component
                         random_component = tensorflow.random.normal([1], mean=0, stddev=tf_daily_vol)[0]
-                        
+
                         # Calculate mean reversion if needed
                         if j > 5:
                             # Calculate trend price
-                            trend_price = tf_current_price * tensorflow.pow(1 + tf_daily_return, tensorflow.cast(j + 1, tensorflow.float32))
+                            trend_price = tf_current_price * tensorflow.pow(1 + tf_daily_return,
+                                                                            tensorflow.cast(j + 1, tensorflow.float32))
                             # Distance from trend
                             distance = prev_price / trend_price - 1
-                            # Mean reversion component 
+                            # Mean reversion component
                             mean_reversion = -distance * tf_mean_reversion_strength * 0.1
                         else:
                             mean_reversion = 0.0
-                        
+
                         # Calculate next price
                         next_price = prev_price * (1 + tf_daily_return + random_component + mean_reversion)
                         path = path.write(j, next_price)
-                    
+
                     return path.stack()
-                
+
                 # Run simulations in parallel batches
                 paths_list = []
                 batch_size = 10  # Process 10 paths at a time
                 for batch in range(0, num_paths, batch_size):
-                    batch_paths = tensorflow.map_fn(simulate_path, tensorflow.range(batch, min(batch + batch_size, num_paths)))
+                    batch_paths = tensorflow.map_fn(simulate_path,
+                                                    tensorflow.range(batch, min(batch + batch_size, num_paths)))
                     paths_list.append(batch_paths)
-                
+
                 # Combine batches
                 price_paths = tensorflow.concat(paths_list, axis=0)
-                
+
                 # Convert to numpy for statistics
                 price_paths_np = price_paths.numpy()
                 print(f"[INFO] Successfully ran TensorFlow GPU simulation with {num_paths} paths")
@@ -2475,66 +2504,66 @@ def generate_price_predictions(data, analysis_details, forecast_days=60, num_pat
         except Exception as e:
             print(f"[INFO] TensorFlow GPU acceleration unavailable: {e}")
             gpu_available = False
-            
+
         # Fallback to optimized NumPy implementation if GPU not available or failed
         if not gpu_available:
             print("[INFO] Using optimized NumPy for price prediction simulation")
-            
+
             # Generate all random components at once for efficiency
             daily_vol = adjusted_volatility / np.sqrt(252)
             random_components = np.random.normal(0, daily_vol, (num_paths, forecast_days))
-            
+
             # Initialize price paths array
             price_paths = np.zeros((num_paths, forecast_days))
-            
+
             # Vectorized first day calculation
             price_paths[:, 0] = current_price * (1 + daily_return + random_components[:, 0])
-            
+
             # Mean reversion strength based on Hurst exponent
             mean_reversion_strength = 1.0 - analysis_factors['hurst_exponent']
-            
+
             # Vectorized simulation for remaining days
             for j in range(1, forecast_days):
                 # Apply drift to all paths
                 drift = daily_return
-                
+
                 # Apply random component to all paths
                 random_component = random_components[:, j]
-                
+
                 # Calculate mean reversion for all paths if past initialization period
                 if j > 5:
                     # Calculate current trend price (same for all paths)
                     trend_price = current_price * (1 + daily_return) ** (j + 1)
-                    
+
                     # Calculate distance from trend for all paths
-                    distance = price_paths[:, j-1] / trend_price - 1
-                    
+                    distance = price_paths[:, j - 1] / trend_price - 1
+
                     # Calculate mean reversion component for all paths
                     mean_reversion = -distance * mean_reversion_strength * 0.1
                 else:
                     mean_reversion = np.zeros(num_paths)
-                
+
                 # Generate next price for all paths
-                price_paths[:, j] = price_paths[:, j-1] * (1 + drift + random_component + mean_reversion)
-            
+                price_paths[:, j] = price_paths[:, j - 1] * (1 + drift + random_component + mean_reversion)
+
             # Use NumPy for statistics
             price_paths_np = price_paths
-        
+
         # Calculate statistics on paths - vectorized operations
         mean_path = np.mean(price_paths_np, axis=0)
         lower_bound_95 = np.percentile(price_paths_np, 2.5, axis=0)
         upper_bound_95 = np.percentile(price_paths_np, 97.5, axis=0)
         lower_bound_68 = np.percentile(price_paths_np, 16, axis=0)
         upper_bound_68 = np.percentile(price_paths_np, 84, axis=0)
-        
+
         # Calculate price targets and returns
-        price_target_30d = mean_path[min(29, forecast_days-1)]
-        price_target_60d = mean_path[min(59, forecast_days-1)]
-        
+        price_target_30d = mean_path[min(29, forecast_days - 1)]
+        price_target_60d = mean_path[min(59, forecast_days - 1)]
+
         # Vectorized return calculations
         expected_return_30d = (price_target_30d / current_price - 1) * 100
         expected_return_60d = (price_target_60d / current_price - 1) * 100
-        
+
         # Return prediction results
         return {
             "current_price": current_price,
@@ -2557,11 +2586,12 @@ def generate_price_predictions(data, analysis_details, forecast_days=60, num_pat
         traceback.print_exc()
         return None
 
+
 # Create prediction plot
 def create_prediction_plot(stock_data, prediction_data, symbol, plot_dir="prediction_plots"):
     """
     Create stock price prediction plot based on analysis
-    
+
     Parameters:
     -----------
     stock_data: pandas DataFrame
@@ -2572,7 +2602,7 @@ def create_prediction_plot(stock_data, prediction_data, symbol, plot_dir="predic
         Stock symbol for the plot title
     plot_dir: str
         Directory to save the plot
-        
+
     Returns:
     --------
     str
@@ -2582,18 +2612,18 @@ def create_prediction_plot(stock_data, prediction_data, symbol, plot_dir="predic
         # Create output directory if it doesn't exist
         os.makedirs(plot_dir, exist_ok=True)
         print(f"[INFO] Ensuring directory exists for prediction plots: {plot_dir}")
-        
+
         # Get the current timestamp for the filename
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         plot_filename = f"{symbol}_prediction_{timestamp}.png"
         plot_path = os.path.join(plot_dir, plot_filename)
-        
+
         # Create plot with historical and predicted data
         plt.figure(figsize=(12, 8))
-        
+
         # Get price column
         price_col = 'close' if 'close' in stock_data.columns else '4. close'
-        
+
         # Get historical dates and prices for plotting
         if isinstance(stock_data.index, pd.DatetimeIndex):
             hist_dates = stock_data.index[-120:]  # Last 120 days of history
@@ -2602,10 +2632,10 @@ def create_prediction_plot(stock_data, prediction_data, symbol, plot_dir="predic
             # If index isn't datetime, create placeholder dates
             hist_dates = pd.date_range(end=pd.Timestamp.today(), periods=min(120, len(stock_data)))
             hist_prices = stock_data[price_col][-min(120, len(stock_data)):]
-        
+
         # Plot historical data
         plt.plot(hist_dates, hist_prices, label="Historical Price", color='blue', linewidth=2)
-        
+
         # Extract prediction data
         forecast_dates = prediction_data['forecast_dates']
         mean_path = prediction_data['mean_path']
@@ -2613,95 +2643,100 @@ def create_prediction_plot(stock_data, prediction_data, symbol, plot_dir="predic
         upper_bound_95 = prediction_data['upper_bound_95']
         lower_bound_68 = prediction_data['lower_bound_68']
         upper_bound_68 = prediction_data['upper_bound_68']
-        
+
         # Plot prediction data
         plt.plot(forecast_dates, mean_path, label="Mean Forecast", color='green', linewidth=2)
-        
+
         # Plot confidence intervals
-        plt.fill_between(forecast_dates, lower_bound_95, upper_bound_95, color='green', alpha=0.1, label="95% Confidence")
-        plt.fill_between(forecast_dates, lower_bound_68, upper_bound_68, color='green', alpha=0.2, label="68% Confidence")
-        
+        plt.fill_between(forecast_dates, lower_bound_95, upper_bound_95, color='green', alpha=0.1,
+                         label="95% Confidence")
+        plt.fill_between(forecast_dates, lower_bound_68, upper_bound_68, color='green', alpha=0.2,
+                         label="68% Confidence")
+
         # Add price targets
         price_target_30d = prediction_data['price_target_30d']
         price_target_60d = prediction_data['price_target_60d']
         expected_return_30d = prediction_data['expected_return_30d']
         expected_return_60d = prediction_data['expected_return_60d']
-        
+
         # Mark 30-day and 60-day targets
         if len(forecast_dates) >= 30:
             plt.plot(forecast_dates[29], price_target_30d, 'o', color='purple', markersize=8)
-            plt.annotate(f"30d: ${price_target_30d:.2f} ({expected_return_30d:.1f}%)", 
-                        (forecast_dates[29], price_target_30d),
-                        xytext=(10, 10), textcoords='offset points',
-                        fontsize=10, color='purple')
-        
+            plt.annotate(f"30d: ${price_target_30d:.2f} ({expected_return_30d:.1f}%)",
+                         (forecast_dates[29], price_target_30d),
+                         xytext=(10, 10), textcoords='offset points',
+                         fontsize=10, color='purple')
+
         if len(forecast_dates) >= 60:
             plt.plot(forecast_dates[59], price_target_60d, 'o', color='red', markersize=8)
-            plt.annotate(f"60d: ${price_target_60d:.2f} ({expected_return_60d:.1f}%)", 
-                        (forecast_dates[59], price_target_60d),
-                        xytext=(10, -20), textcoords='offset points',
-                        fontsize=10, color='red')
-        
+            plt.annotate(f"60d: ${price_target_60d:.2f} ({expected_return_60d:.1f}%)",
+                         (forecast_dates[59], price_target_60d),
+                         xytext=(10, -20), textcoords='offset points',
+                         fontsize=10, color='red')
+
         # Add title and labels
         current_price = prediction_data['current_price']
         volatility = prediction_data['adjusted_volatility']
         annual_return = prediction_data['expected_annual_return']
-        
-        plt.title(f"{symbol} Price Forecast\nCurrent: ${current_price:.2f} | Expected Annual Return: {annual_return*100:.1f}% | Volatility: {volatility*100:.1f}%", 
-                fontsize=14)
+
+        plt.title(
+            f"{symbol} Price Forecast\nCurrent: ${current_price:.2f} | Expected Annual Return: {annual_return * 100:.1f}% | Volatility: {volatility * 100:.1f}%",
+            fontsize=14)
         plt.xlabel("Date", fontsize=12)
         plt.ylabel("Price ($)", fontsize=12)
-        
+
         # Format x-axis to show dates properly
         plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
         plt.gca().xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
         plt.xticks(rotation=45)
-        
+
         # Add grid and legend
         plt.grid(True, alpha=0.3)
         plt.legend(loc="best")
-        
+
         # Adjust layout and save
         plt.tight_layout()
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         plt.close()
-        
+
         print(f"[INFO] Price prediction plot saved to {plot_path}")
         return plot_path
-    
+
     except Exception as e:
         print(f"[ERROR] Error creating prediction plot: {e}")
         traceback.print_exc()
         return None
 
+
 # Initialize in-memory buffer for stock results
 stock_results_buffer = []
+
 
 def append_stock_result(result):
     """
     Add stock analysis result to memory buffer instead of writing to file immediately
-    
+
     Parameters:
     -----------
     result: dict
         Stock analysis result
     """
     global stock_results_buffer
-    
+
     try:
         # Format the output string in memory
         output_lines = []
-        
+
         # Basic information
         output_lines.append(f"=== ANALYSIS FOR {result['symbol']} ===")
-        
+
         # Add company info if available
         if result.get('company_info'):
             company = result['company_info']
             output_lines.append(f"Company: {company.get('Name', 'N/A')}")
             output_lines.append(f"Industry: {company.get('Industry', 'N/A')}")
             output_lines.append(f"Sector: {company.get('Sector', 'N/A')}")
-        
+
         # Price and changes
         if result.get('quote_data'):
             quote = result['quote_data']
@@ -2709,60 +2744,64 @@ def append_stock_result(result):
             output_lines.append(f"Change: {quote.get('change', 0):.2f} ({quote.get('change_percent', '0%')})")
         else:
             output_lines.append(f"Current Price: ${result['price']:.2f}")
-        
+
         output_lines.append(f"Sigma Score: {result['sigma']:.5f}")
         output_lines.append(f"Recommendation: {result['recommendation']}")
         output_lines.append("")
-        
+
         # Add price predictions if available
         if 'predictions' in result:
             predictions = result['predictions']
             output_lines.append("--- PRICE PREDICTIONS ---")
-            output_lines.append(f"30-Day Target: ${predictions['price_target_30d']:.2f} ({predictions['expected_return_30d']:.2f}%)")
-            output_lines.append(f"60-Day Target: ${predictions['price_target_60d']:.2f} ({predictions['expected_return_60d']:.2f}%)")
-            output_lines.append(f"Expected Annual Return: {predictions['expected_annual_return']*100:.2f}%")
-            output_lines.append(f"Adjusted Volatility: {predictions['adjusted_volatility']*100:.2f}%")
-            
+            output_lines.append(
+                f"30-Day Target: ${predictions['price_target_30d']:.2f} ({predictions['expected_return_30d']:.2f}%)")
+            output_lines.append(
+                f"60-Day Target: ${predictions['price_target_60d']:.2f} ({predictions['expected_return_60d']:.2f}%)")
+            output_lines.append(f"Expected Annual Return: {predictions['expected_annual_return'] * 100:.2f}%")
+            output_lines.append(f"Adjusted Volatility: {predictions['adjusted_volatility'] * 100:.2f}%")
+
             # Add path to prediction plot if available
             if 'plot_path' in result:
                 output_lines.append(f"Prediction Plot: {result['plot_path']}")
-            
+
             output_lines.append("")
-        
+
         # Add to buffer for batch writing later
         stock_results_buffer.append('\n'.join(output_lines))
-        print(f"[INFO] Added results for {result['symbol']} to output buffer (buffer size: {len(stock_results_buffer)})")
-        
+        print(
+            f"[INFO] Added results for {result['symbol']} to output buffer (buffer size: {len(stock_results_buffer)})")
+
         # Write to file if buffer reaches threshold
         if len(stock_results_buffer) >= 10:
             flush_results_buffer()
-            
+
         return True
     except Exception as e:
         print(f"[ERROR] Failed to format stock result: {e}")
         traceback.print_exc()
         return False
 
+
 def flush_results_buffer():
     """
     Write all buffered results to the output file in a single operation
     """
     global stock_results_buffer
-    
+
     if not stock_results_buffer:
         print("[INFO] No results in buffer to flush")
         return True
-    
+
     try:
         # Combine all results with separators
-        combined_output = "\n" + "="*50 + "\n\n".join(stock_results_buffer) + "\n\n"
-        
+        combined_output = "\n" + "=" * 50 + "\n\n".join(stock_results_buffer) + "\n\n"
+
         # Append to file in a single write operation
         with open(OUTPUT_FILE, "a") as file:
             file.write(combined_output)
-        
+
         print(f"[INFO] Successfully flushed {len(stock_results_buffer)} results to {OUTPUT_FILE}")
-        
+
         # Clear the buffer
         stock_results_buffer.clear()
         return True
@@ -2771,28 +2810,30 @@ def flush_results_buffer():
         traceback.print_exc()
         return False
 
+
 def initialize_output_file():
     """Initialize the output file with a header"""
     try:
         # Clear the buffer if any previous analysis was running
         global stock_results_buffer
         stock_results_buffer.clear()
-        
+
         # Create directory for the output file if needed
         output_dir = os.path.dirname(OUTPUT_FILE)
         if output_dir and not os.path.exists(output_dir):
             os.makedirs(output_dir, exist_ok=True)
             print(f"[INFO] Created directory for output file: {output_dir}")
-            
+
         # Create or append to the output file
         mode = "a" if os.path.exists(OUTPUT_FILE) else "w"
         with open(OUTPUT_FILE, mode) as file:
             if mode == "w":  # Only write header for new files
                 file.write("===== OPTIMIZED STOCK ANALYSIS RESULTS =====\n")
                 file.write(f"Generated on: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-                file.write(f"GPU Acceleration: {'Enabled' if len(tensorflow.config.list_physical_devices('GPU')) > 0 else 'Disabled'}\n")
-                file.write("="*50 + "\n\n")
-            
+                file.write(
+                    f"GPU Acceleration: {'Enabled' if len(tensorflow.config.list_physical_devices('GPU')) > 0 else 'Disabled'}\n")
+                file.write("=" * 50 + "\n\n")
+
         print(f"[INFO] Output file initialized: {OUTPUT_FILE}")
         return True
     except Exception as e:
@@ -2800,18 +2841,19 @@ def initialize_output_file():
         traceback.print_exc()
         return False
 
+
 # Analyze a stock
 def analyze_stock(symbol, client):
     """
     Analyze a stock and generate recommendations
-    
+
     Parameters:
     -----------
     symbol: str
         Stock symbol to analyze
     client: AlphaVantageClient
         Alpha Vantage API client
-    
+
     Returns:
     --------
     dict
@@ -2820,38 +2862,38 @@ def analyze_stock(symbol, client):
     try:
         # Fetch stock data
         stock_data = client.get_stock_data(symbol)
-        
+
         if stock_data is None or len(stock_data) < 60:
             print(f"[WARNING] Insufficient data for {symbol}")
             return None
-        
+
         # Get company info and quote data
         company_info = client.get_company_overview(symbol)
         quote_data = client.get_global_quote(symbol)
-        
+
         # Get current price
         current_price = quote_data['price'] if quote_data else stock_data['4. close'].iloc[-1]
-        
+
         # Calculate sigma
         analysis_details = calculate_sigma(stock_data)
-        
+
         if analysis_details is None:
             print(f"[WARNING] Failed to calculate sigma for {symbol}")
             return None
-        
+
         sigma = analysis_details["sigma"]
-        
+
         # Get recommendation
         recommendation = get_sigma_recommendation(sigma, analysis_details)
-        
+
         # Generate price predictions based on analysis
         predictions = generate_price_predictions(stock_data, analysis_details)
-        
+
         # Create prediction plot if predictions are available
         plot_path = None
         if predictions:
             plot_path = create_prediction_plot(stock_data, predictions, symbol)
-        
+
         # Create result dictionary
         result = {
             "symbol": symbol,
@@ -2864,29 +2906,30 @@ def analyze_stock(symbol, client):
             "predictions": predictions,
             "plot_path": plot_path
         }
-        
+
         return result
     except Exception as e:
         print(f"[ERROR] Failed to analyze {symbol}: {e}")
         traceback.print_exc()
         return None
 
+
 # Main function
 def main():
     """Main function to run the stock analysis"""
     print("\n===== ENHANCED STOCK ANALYZER =====")
     print("Using advanced ML and mean reversion analysis with price prediction")
-    print("="*50 + "\n")
-    
+    print("=" * 50 + "\n")
+
     try:
         # Initialize output file
         if not initialize_output_file():
             print("[ERROR] Failed to initialize output file. Check permissions and path.")
             return
-        
+
         # Create Alpha Vantage client
         client = AlphaVantageClient(ALPHA_VANTAGE_API_KEY)
-        
+
         # Create prediction plots directory
         if not os.path.exists("prediction_plots"):
             try:
@@ -2895,114 +2938,116 @@ def main():
             except Exception as e:
                 print(f"[WARNING] Failed to create prediction plots directory: {e}")
                 traceback.print_exc()
-        
+
         # Check if command line arguments were provided
         import sys
         if len(sys.argv) > 1:
             # Use the first argument as the stock symbol
             symbol = sys.argv[1].strip().upper()
             print(f"[INFO] Using command line argument for symbol: {symbol}")
-            
+
             # Analyze the stock directly
             result = analyze_stock(symbol, client)
-            
+
             if result:
                 # Append the result to the output file
                 append_stock_result(result)
                 print(f"Analysis for {symbol} completed and saved to {OUTPUT_FILE}")
-                
+
                 # Print prediction summary if available
                 if 'predictions' in result:
                     pred = result['predictions']
                     print(f"\nPrice Predictions:")
                     print(f"30-Day Target: ${pred['price_target_30d']:.2f} ({pred['expected_return_30d']:.2f}%)")
                     print(f"60-Day Target: ${pred['price_target_60d']:.2f} ({pred['expected_return_60d']:.2f}%)")
-                    
+
                     # Display path to the prediction plot if available
                     if 'plot_path' in result:
                         print(f"Prediction Plot saved to: {result['plot_path']}")
             else:
                 print(f"Analysis for {symbol} failed. See log for details.")
-            
+
             # Flush buffer before exiting
             flush_results_buffer()
             print("[INFO] Results buffer flushed.")
-            
+
             # Exit after completing analysis
             return
-                
+
         # Interactive mode if no command line arguments
         while True:
             print("\nOptions:")
             print("1. Analyze a stock")
             print("2. Search for a stock")
             print("3. Exit")
-            
+
             choice = input("Select an option (1-3): ").strip()
-            
+
             if choice == '1':
                 symbol = input("Enter stock symbol to analyze: ").strip().upper()
-                
+
                 if not symbol:
                     print("Please enter a valid stock symbol.")
                     continue
-                
+
                 # Analyze the stock
                 result = analyze_stock(symbol, client)
-                
+
                 if result:
                     # Append the result to the output file
                     append_stock_result(result)
                     print(f"Analysis for {symbol} completed and saved to {OUTPUT_FILE}")
-                    
+
                     # Print prediction summary if available
                     if 'predictions' in result:
                         pred = result['predictions']
                         print(f"\nPrice Predictions:")
                         print(f"30-Day Target: ${pred['price_target_30d']:.2f} ({pred['expected_return_30d']:.2f}%)")
                         print(f"60-Day Target: ${pred['price_target_60d']:.2f} ({pred['expected_return_60d']:.2f}%)")
-                        
+
                         # Display path to the prediction plot if available
                         if 'plot_path' in result:
                             print(f"Prediction Plot saved to: {result['plot_path']}")
                 else:
                     print(f"Analysis for {symbol} failed. See log for details.")
-                    
+
             elif choice == '2':
                 keywords = input("Enter company name or keywords to search: ").strip()
-                
+
                 if not keywords:
                     print("Please enter valid search terms.")
                     continue
-                
+
                 matches = client.get_symbol_search(keywords)
-                
+
                 if matches:
                     print("\nMatching stocks:")
                     print(f"{'Symbol':<10} {'Type':<8} {'Region':<8} Name")
                     print("-" * 70)
-                    
+
                     for match in matches:
                         print(f"{match['symbol']:<10} {match['type']:<8} {match['region']:<8} {match['name']}")
-                    
+
                     analyze_choice = input("\nWould you like to analyze one of these stocks? (y/n): ").strip().lower()
-                    
+
                     if analyze_choice == 'y':
                         symbol = input("Enter the symbol to analyze: ").strip().upper()
                         if symbol:
                             result = analyze_stock(symbol, client)
-                            
+
                             if result:
                                 append_stock_result(result)
                                 print(f"Analysis for {symbol} completed and saved to {OUTPUT_FILE}")
-                                
+
                                 # Print prediction summary if available
                                 if 'predictions' in result:
                                     pred = result['predictions']
                                     print(f"\nPrice Predictions:")
-                                    print(f"30-Day Target: ${pred['price_target_30d']:.2f} ({pred['expected_return_30d']:.2f}%)")
-                                    print(f"60-Day Target: ${pred['price_target_60d']:.2f} ({pred['expected_return_60d']:.2f}%)")
-                                    
+                                    print(
+                                        f"30-Day Target: ${pred['price_target_30d']:.2f} ({pred['expected_return_30d']:.2f}%)")
+                                    print(
+                                        f"60-Day Target: ${pred['price_target_60d']:.2f} ({pred['expected_return_60d']:.2f}%)")
+
                                     # Display path to the prediction plot if available
                                     if 'plot_path' in result:
                                         print(f"Prediction Plot saved to: {result['plot_path']}")
@@ -3010,13 +3055,13 @@ def main():
                                 print(f"Analysis for {symbol} failed. See log for details.")
                 else:
                     print("No matching stocks found.")
-            
+
             elif choice == '3':
                 print("Exiting program. Thank you!")
                 # Flush any remaining results before exiting
                 flush_results_buffer()
                 break
-                
+
             else:
                 print("Invalid option. Please select 1, 2, or 3.")
     except Exception as e:
@@ -3027,19 +3072,22 @@ def main():
         flush_results_buffer()
         print("[INFO] Final results buffer flushed.")
 
+
 if __name__ == "__main__":
     main()
+
+
 def analyze_stock(symbol, client):
     """
     Analyze a stock and generate recommendations
-    
+
     Parameters:
     -----------
     symbol: str
         Stock symbol to analyze
     client: AlphaVantageClient
         Alpha Vantage API client
-    
+
     Returns:
     --------
     dict
@@ -3048,38 +3096,38 @@ def analyze_stock(symbol, client):
     try:
         # Fetch stock data
         stock_data = client.get_stock_data(symbol)
-        
+
         if stock_data is None or len(stock_data) < 60:
             print(f"[WARNING] Insufficient data for {symbol}")
             return None
-        
+
         # Get company info and quote data
         company_info = client.get_company_overview(symbol)
         quote_data = client.get_global_quote(symbol)
-        
+
         # Get current price
         current_price = quote_data['price'] if quote_data else stock_data['4. close'].iloc[-1]
-        
+
         # Calculate sigma
         analysis_details = calculate_sigma(stock_data)
-        
+
         if analysis_details is None:
             print(f"[WARNING] Failed to calculate sigma for {symbol}")
             return None
-        
+
         sigma = analysis_details["sigma"]
-        
+
         # Get recommendation
         recommendation = get_sigma_recommendation(sigma, analysis_details)
-        
+
         # Generate price predictions based on analysis
         predictions = generate_price_predictions(stock_data, analysis_details)
-        
+
         # Create prediction plot if predictions are available
         plot_path = None
         if predictions:
             plot_path = create_prediction_plot(stock_data, predictions, symbol)
-        
+
         # Create result dictionary
         result = {
             "symbol": symbol,
@@ -3092,14 +3140,14 @@ def analyze_stock(symbol, client):
             "predictions": predictions,
             "plot_path": plot_path
         }
-        
+
         return result
     except Exception as e:
         print(f"[ERROR] Failed to analyze {symbol}: {e}")
         traceback.print_exc()
         return None
 
-# Calculate sigma for a stock
+    # Calculate sigma for a stock
     """Calculate comprehensive sigma metric using log returns-based mean reversion"""
     try:
         # Set a maximum execution time for the entire function
@@ -3118,15 +3166,18 @@ def analyze_stock(symbol, client):
 
         # 3. Calculate mean reversion half-life using log returns
         half_life_info = calculate_mean_reversion_half_life(indicators_df)
-        print(f"[INFO] Mean reversion half-life: {half_life_info['half_life']:.1f} days - {half_life_info['mean_reversion_speed']} (beta: {half_life_info.get('beta', 0):.3f})")
+        print(
+            f"[INFO] Mean reversion half-life: {half_life_info['half_life']:.1f} days - {half_life_info['mean_reversion_speed']} (beta: {half_life_info.get('beta', 0):.3f})")
 
         # 4. Analyze volatility regimes with log returns
         vol_data = analyze_volatility_regimes(indicators_df)
-        print(f"[INFO] Volatility regime: {vol_data['vol_regime']} (Term structure: {vol_data['vol_term_structure']:.2f}, Persistence: {vol_data.get('vol_persistence', 0):.2f})")
+        print(
+            f"[INFO] Volatility regime: {vol_data['vol_regime']} (Term structure: {vol_data['vol_term_structure']:.2f}, Persistence: {vol_data.get('vol_persistence', 0):.2f})")
 
         # 5. Detect market regime with log returns
         market_regime = detect_market_regime(indicators_df)
-        print(f"[INFO] Market regime: {market_regime['current_regime']} (Duration: {market_regime['regime_duration']} days)")
+        print(
+            f"[INFO] Market regime: {market_regime['current_regime']} (Duration: {market_regime['regime_duration']} days)")
 
         # 6. Apply PCA to reduce feature dimensionality
         pca_results = None
@@ -3171,7 +3222,9 @@ def analyze_stock(symbol, client):
 
         # MOMENTUM INDICATORS
         # Prefer log volatility if available for more statistical robustness
-        traditional_volatility = indicators_df['log_volatility'].iloc[-1] if 'log_volatility' in indicators_df.columns else indicators_df['volatility'].iloc[-1] if 'volatility' in indicators_df.columns else 0
+        traditional_volatility = indicators_df['log_volatility'].iloc[
+            -1] if 'log_volatility' in indicators_df.columns else indicators_df['volatility'].iloc[
+            -1] if 'volatility' in indicators_df.columns else 0
 
         rsi = latest['RSI'] if not np.isnan(latest['RSI']) else 50
         rsi_signal = (max(0, min(100, rsi)) - 30) / 70
@@ -3362,7 +3415,8 @@ def analyze_stock(symbol, client):
 
         # Get recent monthly return using log returns if available
         if 'log_returns' in indicators_df.columns:
-            recent_returns = indicators_df['log_returns'].iloc[-20:].sum()  # Sum log returns for approximate monthly return
+            recent_returns = indicators_df['log_returns'].iloc[
+                             -20:].sum()  # Sum log returns for approximate monthly return
             recent_returns = np.exp(recent_returns) - 1  # Convert to percentage
             print(f"[INFO] Using accumulated log returns for monthly return: {recent_returns:.2%}")
         else:
@@ -3410,7 +3464,8 @@ def analyze_stock(symbol, client):
             # Gradually increase mean reversion weight for higher recent returns
             excess_return_factor = min(0.3, (recent_returns - 0.15) * 2)  # Up to 0.3 extra weight
             balance_factor = base_balance_factor + excess_return_factor
-            print(f"[INFO] Increasing mean reversion weight by {excess_return_factor:.2f} due to high recent returns ({recent_returns:.1%})")
+            print(
+                f"[INFO] Increasing mean reversion weight by {excess_return_factor:.2f} due to high recent returns ({recent_returns:.1%})")
         elif recent_returns < -0.15:  # <-15% monthly returns (big drop)
             # For big drops, slightly reduce mean reversion weight (they've already reverted)
             balance_factor = max(0.3, base_balance_factor - 0.1)
@@ -3437,7 +3492,8 @@ def analyze_stock(symbol, client):
         elif vol_persistence < 0.7:  # Low volatility persistence
             # In low persistence regimes, weight is more neutral
             balance_factor = (balance_factor + 0.5) / 2  # Move closer to 0.5
-            print(f"[INFO] Adjusting balance factor toward neutral due to low volatility persistence: {vol_persistence:.2f}")
+            print(
+                f"[INFO] Adjusting balance factor toward neutral due to low volatility persistence: {vol_persistence:.2f}")
 
         # Ensure balance factor is reasonable
         balance_factor = max(0.2, min(0.8, balance_factor))
@@ -3479,7 +3535,8 @@ def analyze_stock(symbol, client):
         # Ensure sigma is between 0 and 1
         final_sigma = max(0, min(1, final_sigma))
 
-        print(f"[INFO] Final components: Momentum={momentum_score:.3f}, Reversion={reversion_score:.3f}, Balance={balance_factor:.2f}, Sigma={sigma:.3f}, Final Sigma={final_sigma:.3f}")
+        print(
+            f"[INFO] Final components: Momentum={momentum_score:.3f}, Reversion={reversion_score:.3f}, Balance={balance_factor:.2f}, Sigma={sigma:.3f}, Final Sigma={final_sigma:.3f}")
 
         # Analysis details
         analysis_details = {
