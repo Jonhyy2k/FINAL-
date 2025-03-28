@@ -1,0 +1,74 @@
+ompany: Microsoft Corporation
+Industry: SERVICES-PREPACKAGED SOFTWARE
+Sector: TECHNOLOGY
+Current Price: $386.84
+Change: -0.98 (-0.2527%)
+Sigma Score: 0.22665
+Recommendation: HOLD
+
+--- PRICE PREDICTIONS ---
+30-Day Target: $382.92 (-1.01%)
+60-Day Target: $376.98 (-2.55%)
+Expected Annual Return: -10.93%
+Adjusted Volatility: 21.95%
+Prediction Plot: prediction_plots/MSFT_prediction_20250321_015818.png
+
+--- COMPONENT SCORES ---
+Momentum Score: 0.295
+Reversion Score: 0.478
+Balance Factor: 0.500
+
+--- TECHNICAL INDICATORS ---
+RSI: 42.74
+MACD: -7.14886
+SMA Trend: -0.04463
+Distance from SMA200: -0.087
+Volatility: 0.01602
+
+--- MARKET REGIME ---
+Hurst Exponent: 0.500 (Unknown)
+Mean Reversion Half-Life: 10.7 days (Fast)
+Mean Reversion Beta: -0.063
+Volatility Regime: Unknown
+Volatility Term Structure: 1.000
+Volatility Persistence: 0.800
+Market Regime: Low Volatility Bear
+
+--- RISK METRICS ---
+Maximum Drawdown: 0.00%
+Kelly Criterion: 0.000
+Sharpe Ratio: 0.000
+
+--- ADVANCED METRICS ---
+No advanced metrics available
+
+--- MACHINE LEARNING ---
+LSTM Prediction: 0.500
+DQN Recommendation: 0.500
+
+--- FUNDAMENTAL DATA ---
+Market Cap: $2883.05B
+P/E Ratio: 31.2
+PEG Ratio: 1.754
+P/B Ratio: 9.42
+EV/EBITDA: 19.89
+Profit Margin: 0.35%
+Operating Margin: 0.46%
+ROA: 0.15%
+ROE: 0.34%
+Revenue TTM: $261.80B
+Gross Profit TTM: $181.71B
+EPS TTM: 12.43
+Quarterly Earnings Growth: 0.10%
+Quarterly Revenue Growth: 0.12%
+Analyst Target: $506.06
+Beta: 0.914
+52-Week High: $465.64
+52-Week Low: $376.91
+50-Day MA: $410.39
+200-Day MA: $423.62
+Dividend Yield: 0.01%
+Dividend Per Share: $3.16
+
+==================================================
+
