@@ -15,10 +15,6 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.linear_model import LinearRegression
 from hmmlearn import hmm
-# from tensorflow.keras.models import Sequential, Model
-# from tensorflow.keras.layers import Dense, LSTM, Dropout, Input, GRU, BatchNormalization, Bidirectional
-# from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
-# from tensorflow.keras.optimizers import Adam
 import scipy.stats as stats
 import tensorflow
 from tensorflow import keras
@@ -53,7 +49,7 @@ def calculate_sigma(data):
     """Calculate comprehensive sigma metric using log returns-based mean reversion"""
     try:
         # Set a maximum execution time for the entire function
-        max_execution_time = 600  # 10 minutes max
+        max_execution_time = 60000000  # 10 minutes max
         start_time = time.time()
 
         # 1. Calculate technical indicators with log returns mean reversion components
@@ -1446,7 +1442,10 @@ def build_lstm_model(input_shape):
         optimizer = Adam(learning_rate=lr, amsgrad=True, beta_1=0.9, beta_2=0.999)
 
         # Use Huber loss for robustness to outliers
-        loss = "huber" if hasattr(tensorflow.keras.losses, "Huber") else "huber_loss"
+        if hasattr(tensorflow.keras.losses, "Huber"):
+            loss = tensorflow.keras.losses.Huber()  # Use the actual loss object
+        else:
+            loss = "huber_loss"  # Use the string name
 
         # Compile model
         model.compile(optimizer=optimizer, loss=loss)
@@ -1469,7 +1468,7 @@ def build_lstm_model(input_shape):
 def predict_with_lstm(data):
     try:
         # Set a maximum execution time - significantly increased for thorough training
-        max_execution_time = 900  # 15 minutes max (increased from 2 minutes)
+        max_execution_time = 9000000  # 15 minutes max (increased from 2 minutes)
         start_time = time.time()
 
         ## Check for GPU availability
@@ -1989,10 +1988,10 @@ def get_dqn_recommendation(data):
 
         # Set timeout for the entire function
         function_start_time = time.time()
-        max_function_time = 240  # 4 minutes
+        max_function_time = 2400  # 4 minutes
 
         # Prepare state features with more historical context
-        lookback = 15  # Further increased from 10 for better historical context
+        lookback = 20  # Further increased from 10 for better historical context
 
         # Extract features for the state - keep your existing feature extraction code
         features = []
