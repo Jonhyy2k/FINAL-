@@ -1,6 +1,7 @@
 #This is like almost it, everything is perfect (almost) 1/4
 
 #THIS IS IT!!! MAYBE MORE LSTM 
+#it was done, for now...
 import os
 import json
 import numpy as np
@@ -39,14 +40,183 @@ else:
     print("[WARNING] No GPU found, using CPU instead")
 
 # Alpha Vantage API key
-# ALPHA_VANTAGE_API_KEY = "73KWO176IRABCOCJ"
-ALPHA_VANTAGE_API_KEY = "FAD56FMDCHAL8V1T"
+#ALPHA_VANTAGE_API_KEY = "73KWO176IRABCOCJ"
+#ALPHA_VANTAGE_API_KEY = "FAD56FMDCHAL8V1T"
+#ALPHA_VANTAGE_API_KEY = "VEBT699FFQNZR85X"
+ALPHA_VANTAGE_API_KEY = "IE4EDZ78E3WEUZKO"
+
 
 # Output file
 OUTPUT_FILE = "STOCK_ANALYSIS_RESULTS.txt"
 
 from alpha_vantage_client import AlphaVantageClient
 
+# 2. Second modification: Enhanced drawdown analysis with adaptive factors
+def analyze_drawdowns(df, window_size=180):  # Changed from 60 to 180 to match LSTM
+    """
+    Advanced drawdown analysis tailored to individual stock characteristics
+    
+    Parameters:
+    -----------
+    df: pandas.DataFrame
+        DataFrame with historical data including returns
+    window_size: int
+        Size of the sliding window for analyzing drawdown patterns
+        
+    Returns:
+    --------
+    dict
+        Dictionary with detailed drawdown metrics
+    """
+    try:
+        print(f"[INFO] Analyzing drawdown patterns with window size: {window_size} days (matching LSTM window)")
+        
+        # Use log returns if available for more accurate drawdown calculation
+        if 'log_returns' in df.columns:
+            returns = df['log_returns'].dropna()
+            cumulative_returns = np.exp(np.cumsum(returns)) - 1
+            print("[INFO] Using log returns for drawdown analysis")
+        elif 'returns' in df.columns:
+            returns = df['returns'].dropna()
+            cumulative_returns = (1 + returns).cumprod() - 1
+            print("[INFO] Using regular returns for drawdown analysis")
+        else:
+            # Fallback to calculating returns from price
+            price_col = 'close' if 'close' in df.columns else '4. close'
+            prices = df[price_col].dropna().values
+            returns = pd.Series(np.diff(np.log(prices)))
+            cumulative_returns = np.exp(np.cumsum(returns)) - 1
+            print("[INFO] Calculated returns from price data for drawdown analysis")
+        
+        # Calculate drawdowns
+        peak = cumulative_returns.cummax()
+        drawdowns = (cumulative_returns / peak) - 1
+        
+        # Identify drawdown events
+        # A drawdown event begins when a drawdown starts and ends when we return to the previous peak
+        drawdown_events = []
+        in_drawdown = False
+        start_idx = 0
+        max_drawdown = 0
+        
+        for i, dd in enumerate(drawdowns):
+            if not in_drawdown and dd < -0.02:  # Start of a significant drawdown (> 2%)
+                in_drawdown = True
+                start_idx = i
+                max_drawdown = dd
+            elif in_drawdown:
+                if dd < max_drawdown:  # Drawdown getting deeper
+                    max_drawdown = dd
+                if dd >= 0:  # Recovered to previous peak
+                    # Record the drawdown event
+                    duration = i - start_idx
+                    drawdown_events.append({
+                        'start_idx': start_idx,
+                        'end_idx': i,
+                        'duration': duration,
+                        'depth': max_drawdown,
+                        'recovery_time': duration,  # Full recovery time
+                        'avg_recovery_rate': -max_drawdown / duration if duration > 0 else 0
+                    })
+                    in_drawdown = False
+        
+        # If still in drawdown at the end of the data
+        if in_drawdown:
+            duration = len(drawdowns) - start_idx
+            drawdown_events.append({
+                'start_idx': start_idx,
+                'end_idx': len(drawdowns) - 1,
+                'duration': duration,
+                'depth': max_drawdown,
+                'recovery_time': None,  # Hasn't recovered yet
+                'avg_recovery_rate': None
+            })
+        
+        # Analyze drawdown statistics
+        if not drawdown_events:
+            print("[INFO] No significant drawdown events detected")
+            return {
+                'max_drawdown': drawdowns.min(),
+                'drawdown_count': 0,
+                'avg_drawdown_depth': 0,
+                'avg_drawdown_duration': 0,
+                'recovery_rate': 0,
+                'drawdown_frequency': 0,
+                'drawdown_severity': 0,
+                'risk_adjustment': 1.0
+            }
+        
+        # Calculate statistics
+        drawdown_depths = [event['depth'] for event in drawdown_events]
+        drawdown_durations = [event['duration'] for event in drawdown_events]
+        
+        # Filter for completed drawdowns to calculate recovery stats
+        completed_events = [event for event in drawdown_events if event['recovery_time'] is not None]
+        recovery_times = [event['recovery_time'] for event in completed_events] if completed_events else [0]
+        recovery_rates = [event['avg_recovery_rate'] for event in completed_events if event['avg_recovery_rate'] is not None]
+        
+        # Calculate average statistics
+        avg_depth = np.mean(drawdown_depths)
+        avg_duration = np.mean(drawdown_durations)
+        avg_recovery_time = np.mean(recovery_times) if recovery_times else None
+        avg_recovery_rate = np.mean(recovery_rates) if recovery_rates else None
+        
+        # Calculate drawdown frequency (events per year)
+        total_trading_days = len(returns)
+        years = total_trading_days / 252  # Assuming 252 trading days per year
+        drawdown_frequency = len(drawdown_events) / years
+        
+        # Calculate drawdown severity - combined measure of depth and duration
+        # More negative (deeper) drawdowns and longer durations = higher severity
+        drawdown_severity = np.mean([-depth * duration for depth, duration in zip(drawdown_depths, drawdown_durations)])
+        
+        # Calculate probability of future drawdowns based on historical pattern
+        # More frequent and severe drawdowns increase this probability
+        # Normalized to a 0-1 scale where 1 = highest probability
+        drawdown_probability = min(1.0, (drawdown_frequency / 4.0) * (drawdown_severity / 0.2))
+        
+        # Calculate recovery resilience - how quickly the stock tends to recover
+        # Normalized to a 0-1 scale where 1 = most resilient (faster recovery)
+        if completed_events and avg_recovery_rate:
+            recovery_resilience = min(1.0, max(0.0, 0.5 - avg_recovery_rate * 100))
+        else:
+            recovery_resilience = 0.5  # Neutral if no data
+        
+        # Calculate risk adjustment factor for sigma
+        # This will adapt based on the specific drawdown characteristics of the stock
+        # More severe/frequent drawdowns = higher discount (lower factor)
+        # More resilient recovery = less discount (higher factor)
+        risk_adjustment = calculate_adaptive_risk_adjustment(
+            max_drawdown=min(drawdown_depths),
+            drawdown_frequency=drawdown_frequency,
+            drawdown_severity=drawdown_severity,
+            recovery_resilience=recovery_resilience
+        )
+        
+        # Return comprehensive drawdown analysis
+        return {
+            'max_drawdown': min(drawdown_depths),
+            'drawdown_count': len(drawdown_events),
+            'avg_drawdown_depth': avg_depth,
+            'avg_drawdown_duration': avg_duration,
+            'avg_recovery_time': avg_recovery_time,
+            'avg_recovery_rate': avg_recovery_rate,
+            'drawdown_frequency': drawdown_frequency,
+            'drawdown_severity': drawdown_severity,
+            'drawdown_probability': drawdown_probability,
+            'recovery_resilience': recovery_resilience,
+            'risk_adjustment': risk_adjustment,
+            'drawdown_events': drawdown_events
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] Error in drawdown analysis: {e}")
+        traceback.print_exc()
+        return {
+            'max_drawdown': drawdowns.min() if 'drawdowns' in locals() else 0,
+            'error': str(e),
+            'risk_adjustment': 0.8  # Default conservative adjustment on error
+        }
 
 def calculate_sigma(data):
     """Calculate comprehensive sigma metric using log returns-based mean reversion"""
@@ -1064,8 +1234,9 @@ def detect_market_regime(data, n_regimes=3):
 
 
 # Risk-Adjusted Metrics with log return improvements
+# 3. Replace the old Risk-Adjusted Metrics function with our enhanced version
 def calculate_risk_adjusted_metrics(df, sigma):
-    """Calculate risk-adjusted metrics using log returns for more accuracy"""
+    """Calculate risk-adjusted metrics using log returns and enhanced drawdown analysis"""
     try:
         # Use log returns if available for better statistical properties
         if 'log_returns' in df.columns:
@@ -1081,12 +1252,12 @@ def calculate_risk_adjusted_metrics(df, sigma):
             returns = pd.Series(np.diff(np.log(prices)))
             print("[INFO] Calculated returns from price data for risk-adjusted metrics")
 
-        # Calculate Maximum Historical Drawdown
-        # For log returns, we need to convert back to cumulative returns
-        cum_returns = np.exp(np.cumsum(returns)) if 'log_returns' in df.columns else (1 + returns).cumprod()
-        running_max = cum_returns.cummax()
-        drawdown = (cum_returns / running_max - 1)
-        max_drawdown = drawdown.min()
+        # Run enhanced drawdown analysis
+        drawdown_analysis = analyze_drawdowns(df, window_size=180)  # Matching LSTM window for consistency
+        
+        # Get adaptive risk adjustment factor from drawdown analysis
+        risk_adjustment = drawdown_analysis.get('risk_adjustment', 0.8)
+        max_drawdown = drawdown_analysis.get('max_drawdown', 0)
 
         # Calculate Conditional Value at Risk (CVaR / Expected Shortfall)
         alpha = 0.05  # 95% confidence level
@@ -1094,7 +1265,7 @@ def calculate_risk_adjusted_metrics(df, sigma):
         cvar_95 = returns[returns <= var_95].mean() if sum(returns <= var_95) > 0 else var_95
 
         # Calculate Kelly Criterion
-        # For log returns, we adjust the win/loss calculation
+        # For log returns, adjust the win/loss calculation
         if 'log_returns' in df.columns:
             # Convert to arithmetic returns for Kelly calculation
             arith_returns = np.exp(returns) - 1
@@ -1126,18 +1297,23 @@ def calculate_risk_adjusted_metrics(df, sigma):
 
         sharpe = ret_mean / ret_std if ret_std > 0 else 0
 
-        # Scale sigma based on risk metrics
-        risk_adjusted_sigma = sigma
+        # Calculate Sortino Ratio (focusing on downside risk)
+        downside_returns = returns[returns < 0]
+        downside_std = downside_returns.std() * np.sqrt(252) if len(downside_returns) > 0 else ret_std
+        sortino = ret_mean / downside_std if downside_std > 0 else 0
 
-        # Reduce sigma for extremely high drawdowns
-        if max_drawdown < -0.5:  # >50% drawdown
-            risk_adjusted_sigma *= 0.5
-        elif max_drawdown < -0.3:  # >30% drawdown
-            risk_adjusted_sigma *= 0.8
+        # Scale sigma based on risk metrics and drawdown analysis
+        risk_adjusted_sigma = sigma * risk_adjustment
 
-        # Reduce sigma for negative kelly values
+        # Reduce sigma for negative kelly values on top of drawdown adjustment
         if kelly < 0:
             risk_adjusted_sigma *= (1 + kelly)  # Reduce by up to 100% for kelly = -1
+
+        # Adjust based on Sharpe ratio
+        if sharpe > 1.5:  # Excellent risk-adjusted returns
+            risk_adjusted_sigma = min(1.0, risk_adjusted_sigma * 1.2)  # Boost by up to 20%
+        elif sharpe < 0:  # Poor risk-adjusted returns
+            risk_adjusted_sigma *= 0.8  # Reduce by 20%
 
         # Ensure sigma is within bounds
         risk_adjusted_sigma = max(0.01, min(1.0, risk_adjusted_sigma))
@@ -1147,18 +1323,21 @@ def calculate_risk_adjusted_metrics(df, sigma):
             "cvar_95": cvar_95,
             "kelly": kelly,
             "sharpe": sharpe,
-            "risk_adjusted_sigma": risk_adjusted_sigma
+            "sortino": sortino,
+            "risk_adjusted_sigma": risk_adjusted_sigma,
+            "drawdown_analysis": drawdown_analysis
         }
     except Exception as e:
         print(f"[ERROR] Error calculating risk-adjusted metrics: {e}")
+        traceback.print_exc()
         return {
-            "max_drawdown": 0,
+            "max_drawdown": max_drawdown if 'max_drawdown' in locals() else 0,
             "cvar_95": 0,
             "kelly": 0,
             "sharpe": 0,
-            "risk_adjusted_sigma": sigma
+            "sortino": 0,
+            "risk_adjusted_sigma": sigma * 0.8  # Default conservative adjustment
         }
-
 
 # PCA function to reduce dimensionality of features
 def apply_pca(features_df):
@@ -1227,14 +1406,15 @@ def apply_pca(features_df):
         return None, None
 
 
-# Enhanced data preparation for LSTM prediction with log returns features
-def prepare_lstm_data(data, time_steps=60):
+# 1. First modification: Change LSTM time steps to 180 days
+def prepare_lstm_data(data, time_steps=180):  # Changed from 60 to 180
     try:
         # Check if we have enough data
         if len(data) < time_steps + 10:
             print(f"[WARNING] Not enough data for LSTM: {len(data)} < {time_steps + 10}")
             return None, None, None
 
+        # Rest of the function remains the same
         # Use multiple features including log returns
         features = []
 
@@ -1382,7 +1562,6 @@ def prepare_lstm_data(data, time_steps=60):
             print(f"[ERROR] Fallback LSTM data preparation also failed: {e2}")
             return None, None, None
 
-
 # Enhanced LSTM model for volatility prediction - maximized for M1 iMac
 def build_lstm_model(input_shape):
     try:
@@ -1454,6 +1633,7 @@ def build_lstm_model(input_shape):
 
 
 # Enhanced LSTM model training and prediction with extended processing time
+# 4. Update prediction with LSTM to use 180-day window
 def predict_with_lstm(data):
     try:
         # Set a maximum execution time - significantly increased for thorough training
@@ -1461,12 +1641,12 @@ def predict_with_lstm(data):
         start_time = time.time()
 
         # Require less data to attempt prediction
-        if len(data) < 60:
-            print("[WARNING] Not enough data for LSTM model")
+        if len(data) < 180:  # Update minimum data requirement for 180-day window
+            print("[WARNING] Not enough data for LSTM model with 180-day window")
             return 0
 
-        # Use a larger window for more context
-        time_steps = 60  # Increased for better prediction accuracy
+        # Use updated window size
+        time_steps = 180  # Increased from 60 to 180 for better prediction accuracy
 
         # Prepare data with enhanced features including log returns
         X, y, scaler = prepare_lstm_data(data, time_steps=time_steps)
@@ -1479,14 +1659,14 @@ def predict_with_lstm(data):
             print(f"[WARNING] Not enough data after preparation: {len(X)}")
             return 0
 
-        # Build enhanced model
+        # Build enhanced model - adjust input shape for larger time window
         model = build_lstm_model((X.shape[1], X.shape[2]))
         if model is None:
             print("[WARNING] Failed to build LSTM model")
             return 0
 
         # Use more training data for better learning
-        max_samples = 1000  # Significantly increased from 500
+        max_samples = 1000
         if len(X) > max_samples:
             # Use evenly spaced samples to get good representation
             indices = np.linspace(0, len(X) - 1, max_samples, dtype=int)
@@ -1496,6 +1676,7 @@ def predict_with_lstm(data):
             X_train = X
             y_train = y
 
+        # Rest of the function remains the same
         # Use try/except for model training
         try:
             # Check if we're still within time limit
@@ -1508,13 +1689,13 @@ def predict_with_lstm(data):
                     return data['volatility'].iloc[-15:].mean() / data['volatility'].iloc[-45:].mean()
 
             # Train model with more epochs and better callbacks
-            early_stop = EarlyStopping(monitor='loss', patience=5, verbose=0)  # Increased patience
+            early_stop = EarlyStopping(monitor='loss', patience=5, verbose=0)
             reduce_lr = ReduceLROnPlateau(monitor='loss', factor=0.5, patience=3, min_lr=0.0001)
 
             # Set parameters for extensive training
             model.fit(
                 X_train, y_train,
-                epochs=30,  # Doubled from 15
+                epochs=30,
                 batch_size=32,
                 callbacks=[early_stop, reduce_lr],
                 verbose=0,
@@ -1558,7 +1739,7 @@ def predict_with_lstm(data):
                 return 0.5  # Return a neutral value
 
             # Use ensemble of predictions from the last few sequences for better stability
-            num_pred_samples = min(10, len(X))  # Increased from 5
+            num_pred_samples = min(10, len(X))
             predictions = []
 
             for i in range(num_pred_samples):
@@ -1589,7 +1770,7 @@ def predict_with_lstm(data):
             else:
                 predicted_volatility_change = abs((avg_prediction - last_actual) / last_actual)
 
-            print(f"[DEBUG] LSTM prediction: {predicted_volatility_change}")
+            print(f"[DEBUG] LSTM prediction with 180-day window: {predicted_volatility_change}")
 
             # Return a more nuanced measure capped at 1.0
             return min(1.0, max(0.1, predicted_volatility_change))
@@ -2223,8 +2404,9 @@ def create_ensemble_prediction(momentum_score, reversion_score, lstm_prediction,
 
 # Calculate sigma for a stock
 # Enhanced sigma recommendation function with rich context
+# Update the get_sigma_recommendation function to include new drawdown metrics
 def get_sigma_recommendation(sigma, analysis_details):
-    """Enhanced recommendation function with log return and mean reversion context"""
+    """Enhanced recommendation function with additional drawdown context"""
     # Get additional context for our recommendation
     momentum_score = analysis_details.get("momentum_score", 0.5)
     reversion_score = analysis_details.get("reversion_score", 0.5)
@@ -2232,13 +2414,21 @@ def get_sigma_recommendation(sigma, analysis_details):
     balance_factor = analysis_details.get("balance_factor", 0.5)
     hurst_regime = analysis_details.get("hurst_regime", "Unknown")
     mean_reversion_speed = analysis_details.get("mean_reversion_speed", "Unknown")
-    mean_reversion_beta = analysis_details.get("mean_reversion_beta", 0)  # Added beta coefficient
+    mean_reversion_beta = analysis_details.get("mean_reversion_beta", 0)
     volatility_regime = analysis_details.get("volatility_regime", "Unknown")
-    vol_persistence = analysis_details.get("vol_persistence", 0.8)  # Added volatility persistence
+    vol_persistence = analysis_details.get("vol_persistence", 0.8)
     market_regime = analysis_details.get("market_regime", "Unknown")
     max_drawdown = analysis_details.get("max_drawdown", 0)
     kelly = analysis_details.get("kelly", 0)
-    sharpe = analysis_details.get("sharpe", 0)  # Added Sharpe ratio
+    sharpe = analysis_details.get("sharpe", 0)
+    
+    # Get enhanced drawdown metrics if available
+    drawdown_analysis = analysis_details.get("drawdown_analysis", {})
+    drawdown_count = drawdown_analysis.get("drawdown_count", 0)
+    drawdown_probability = drawdown_analysis.get("drawdown_probability", 0)
+    recovery_resilience = drawdown_analysis.get("recovery_resilience", 0.5)
+    avg_drawdown_depth = drawdown_analysis.get("avg_drawdown_depth", 0)
+    avg_recovery_time = drawdown_analysis.get("avg_recovery_time", 0)
 
     # Base recommendation on sigma
     if sigma > 0.8:
@@ -2252,7 +2442,7 @@ def get_sigma_recommendation(sigma, analysis_details):
     else:
         base_rec = "STRONG SELL"
 
-    # Add nuanced context based on recent performance and advanced metrics, including log returns
+    # Add nuanced context based on recent performance, drawdowns, and advanced metrics
     if recent_monthly_return > 0.25 and sigma > 0.6:
         if "Mean Reversion" in hurst_regime and mean_reversion_speed in ["Fast", "Very Fast"]:
             context = f"Strong momentum with +{recent_monthly_return:.1%} monthly gain, but high mean reversion risk (Hurst={analysis_details.get('hurst_exponent', 0):.2f}, Beta={mean_reversion_beta:.2f})"
@@ -2284,7 +2474,7 @@ def get_sigma_recommendation(sigma, analysis_details):
         else:
             context = f"Potential stabilization after {recent_monthly_return:.1%} monthly decline, monitor for trend change"
     else:
-        # Default context with advanced metrics, including log returns data
+        # Default context with advanced metrics, including drawdown analysis
         if momentum_score > 0.7 and "Trending" in hurst_regime:
             context = f"Strong trend characteristics (Hurst={analysis_details.get('hurst_exponent', 0):.2f}) with minimal reversal signals"
         elif momentum_score > 0.7 and reversion_score > 0.5:
@@ -2299,27 +2489,45 @@ def get_sigma_recommendation(sigma, analysis_details):
             context = f"Balanced indicators with no clear edge in {volatility_regime} volatility"
         else:
             context = f"Mixed signals requiring monitoring with log-based half-life of {analysis_details.get('mean_reversion_half_life', 0):.1f} days"
-
+    
+    # Add new enhanced drawdown analysis context
+    if drawdown_count > 0:
+        # Add drawdown specific context based on historical patterns
+        if drawdown_count >= 3 and avg_drawdown_depth < -0.15:
+            context += f" | History of frequent significant drawdowns ({drawdown_count} events, avg depth: {avg_drawdown_depth:.1%})"
+        
+        if drawdown_probability > 0.6:
+            context += f" | High probability of future drawdown ({drawdown_probability:.2f}) based on historical patterns"
+        elif drawdown_probability > 0.3:
+            context += f" | Moderate drawdown risk ({drawdown_probability:.2f})"
+            
+        if recovery_resilience > 0.7:
+            context += f" | Strong recovery resilience ({recovery_resilience:.2f})"
+        elif recovery_resilience < 0.3:
+            context += f" | Poor historical recovery pattern ({recovery_resilience:.2f})"
+            
+        if avg_recovery_time and avg_recovery_time > 60:
+            context += f" | Typically long recovery periods ({avg_recovery_time:.0f} days avg)"
+    
     # Add risk metrics
     if max_drawdown < -0.4:
         context += f" | High historical drawdown risk ({max_drawdown:.1%})"
-
+    
     if kelly < -0.2:
         context += f" | Negative expectancy (Kelly={kelly:.2f})"
     elif kelly > 0.3:
         context += f" | Strong positive expectancy (Kelly={kelly:.2f})"
-
+    
     # Add Sharpe ratio if available
     if sharpe > 1.5:
         context += f" | Excellent risk-adjusted returns (Sharpe={sharpe:.2f})"
     elif sharpe < 0:
         context += f" | Poor risk-adjusted returns (Sharpe={sharpe:.2f})"
-
+    
     # Combine base recommendation with context
     recommendation = f"{base_rec} - {context}"
-
+    
     return recommendation
-
 
 # Generate price predictions based on analysis results
 def generate_price_predictions(data, analysis_details, forecast_days=60, num_paths=100):
