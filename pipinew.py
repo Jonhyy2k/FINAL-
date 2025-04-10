@@ -27,7 +27,9 @@ from keras.layers import Dense, LSTM, Dropout, Input, GRU, BatchNormalization, B
 from keras.optimizers import Adam
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 import logging
-from bloomberg import normalized_sentiment
+from bloomberg import get_normalized_news_sentiment
+
+TF_ENABLE_ONEDNN_OPTS=0
 
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
@@ -55,10 +57,12 @@ OUTPUT_FILE = "STOCK_ANALYSIS_RESULTS.txt"
 
 from alpha_vantage_client import AlphaVantageClient
 
+# Modified analyze_stock function (originally from semibloom.txt)
+# Make sure the import 'from sentiment_analyzer import get_normalized_news_sentiment' is added at the top
 def analyze_stock(symbol, client):
     """
     Analyze a stock and generate recommendations with improved prediction bands
-    
+
     Parameters:
     -----------
     symbol: str
@@ -69,171 +73,175 @@ def analyze_stock(symbol, client):
     Returns:
     --------
     dict
-        Analysis result with enhanced prediction bands
+        Analysis result with enhanced prediction bands or None on failure
     """
     try:
         # Fetch stock data
-        stock_data = client.get_stock_data(symbol)
+        stock_data = client.get_stock_data(symbol) #
 
-        if stock_data is None or len(stock_data) < 60:
-            print(f"[WARNING] Insufficient data for {symbol}")
+        if stock_data is None or len(stock_data) < 60: #
+            print(f"[WARNING] Insufficient data for {symbol}") #
             return None
 
         # Get company info and quote data
-        company_info = client.get_company_overview(symbol)
-        quote_data = client.get_global_quote(symbol)
+        company_info = client.get_company_overview(symbol) #
+        quote_data = client.get_global_quote(symbol) #
 
         # Get current price
-        current_price = quote_data['price'] if quote_data else stock_data['4. close'].iloc[-1]
+        current_price = quote_data['price'] if quote_data else stock_data['4. close'].iloc[-1] #
 
-        # Calculate sigma
-        analysis_details = calculate_sigma(stock_data)
+        # --- NEW: Fetch dynamic news sentiment ---
+        print(f"[INFO] Fetching news sentiment for {symbol}...")
+        sentiment_score = get_normalized_news_sentiment(symbol)
+        # Use a default neutral score if fetching fails
+        sentiment_score_for_calc = sentiment_score if sentiment_score is not None else 0.5
+        if sentiment_score is not None:
+             print(f"[INFO] Retrieved Normalized News Sentiment: {sentiment_score:.4f}")
+        else:
+             print(f"[WARNING] Could not retrieve news sentiment for {symbol}. Using default 0.5.")
+        # --- End NEW ---
 
-        if analysis_details is None:
-            print(f"[WARNING] Failed to calculate sigma for {symbol}")
+        # --- MODIFIED: Pass sentiment_score_for_calc to calculate_sigma ---
+        analysis_details = calculate_sigma(stock_data) # Pass the score here
+
+        if analysis_details is None: #
+            print(f"[WARNING] Failed to calculate sigma for {symbol}") #
             return None
 
-        sigma = analysis_details["sigma"]
+        sigma = analysis_details["sigma"] #
 
         # Get recommendation
-        recommendation = get_sigma_recommendation(sigma, analysis_details)
+        recommendation = get_sigma_recommendation(sigma, analysis_details) #
 
         # Generate price predictions based on analysis
-        # CHANGE: Replace with the improved prediction function for tighter bands
-        try:
+        predictions = None # Initialize predictions
+        try: #
             # First try the optimized version with tighter bands
-            predictions = generate_optimized_price_predictions(stock_data, analysis_details)
-            if predictions:
-                print(f"[INFO] Using optimized price predictions with tighter bands for {symbol}")
-           # else:
-            #    # Fall back to original prediction function if optimized version fails
-             #   print(f"[WARNING] Optimized prediction failed for {symbol}, falling back to original method")
-              #  predictions = generate_price_predictions(stock_data, analysis_details)
-        except Exception as pred_error:
-            print(f"[ERROR] Optimized prediction error: {pred_error}, using original method")
-            traceback.print_exc()
-            # Use original prediction function as fallback
-            predictions = generate_price_predictions(stock_data, analysis_details)
+            predictions = generate_optimized_price_predictions(stock_data, analysis_details) #
+            if predictions: #
+                print(f"[INFO] Using optimized price predictions with tighter bands for {symbol}") #
+        except Exception as pred_error: #
+            print(f"[ERROR] Optimized prediction error: {pred_error}, using original method") #
+            traceback.print_exc() #
+            # Use original prediction function as fallback (assuming it exists)
+            # predictions = generate_price_predictions(stock_data, analysis_details) #
 
         # Create prediction plot if predictions are available
-        # CHANGE: Use improved plotting when available, fall back to original if needed
-        plot_path = None
-        if predictions:
-            try:
+        plot_path = None #
+        if predictions: #
+            try: #
                 # Try using improved plotting first
-                plot_path = create_improved_prediction_plot(stock_data, predictions, symbol)
-                if not plot_path:
-                    # Fall back to original plotting if improved version fails
-                    print("Error when ceating advanced predicion plot.")
-                    time.sleep(1)
-                    print("Using normal prediction plot...")
-                    plot_path = create_prediction_plot(stock_data, predictions, symbol)
-            except Exception as plot_error:
-                print(f"[ERROR] Improved plotting error: {plot_error}, using original method")
-                # Use original plotting function as fallback
-                plot_path = create_prediction_plot(stock_data, predictions, symbol)
+                plot_path = create_improved_prediction_plot(stock_data, predictions, symbol) #
+                if not plot_path: #
+                    print("Error when creating advanced prediction plot.") #
+                    time.sleep(1) #
+                    print("Using normal prediction plot...") #
+                    # plot_path = create_prediction_plot(stock_data, predictions, symbol) # Assuming this function exists
+            except Exception as plot_error: #
+                print(f"[ERROR] Improved plotting error: {plot_error}, using original method") #
+                # Use original plotting function as fallback (assuming it exists)
+                # plot_path = create_prediction_plot(stock_data, predictions, symbol) #
 
         # Run detailed drawdown analysis - enhanced with adaptive factors
-        drawdown_analysis = analyze_drawdowns(stock_data, window_size=180)
-        if drawdown_analysis and isinstance(drawdown_analysis, dict):
+        drawdown_analysis = analyze_drawdowns(stock_data, window_size=180) #
+        if drawdown_analysis and isinstance(drawdown_analysis, dict): #
             # Add to analysis details if available
-            analysis_details["drawdown_analysis"] = drawdown_analysis
+            analysis_details["drawdown_analysis"] = drawdown_analysis #
             # Extract key metrics for easy access
-            analysis_details["max_drawdown"] = drawdown_analysis.get("max_drawdown", analysis_details.get("max_drawdown", 0))
+            analysis_details["max_drawdown"] = drawdown_analysis.get("max_drawdown", analysis_details.get("max_drawdown", 0)) #
             # Keep original risk_adjustment if available or use the new one
-            if "risk_adjustment" not in analysis_details and "risk_adjustment" in drawdown_analysis:
-                analysis_details["risk_adjustment"] = drawdown_analysis.get("risk_adjustment", 1.0)
+            if "risk_adjustment" not in analysis_details and "risk_adjustment" in drawdown_analysis: #
+                analysis_details["risk_adjustment"] = drawdown_analysis.get("risk_adjustment", 1.0) #
 
         # Ensure we have risk metrics
-        if "risk_metrics" not in analysis_details:
-            analysis_details["risk_metrics"] = {}
+        if "risk_metrics" not in analysis_details: #
+            analysis_details["risk_metrics"] = {} #
 
         # Add drawdown probability and recovery metrics if available
-        if drawdown_analysis:
-            if "drawdown_probability" in drawdown_analysis:
-                analysis_details["risk_metrics"]["drawdown_probability"] = drawdown_analysis["drawdown_probability"]
-            if "recovery_resilience" in drawdown_analysis:
-                analysis_details["risk_metrics"]["recovery_resilience"] = drawdown_analysis["recovery_resilience"]
+        if drawdown_analysis: #
+            if "drawdown_probability" in drawdown_analysis: #
+                analysis_details["risk_metrics"]["drawdown_probability"] = drawdown_analysis["drawdown_probability"] #
+            if "recovery_resilience" in drawdown_analysis: #
+                analysis_details["risk_metrics"]["recovery_resilience"] = drawdown_analysis["recovery_resilience"] #
 
         # Calculate additional risk metrics and ratings
-        risk_metrics = {}
-        
+        risk_metrics = {} #
         # Include all existing risk metrics from analysis details
-        if "sharpe" in analysis_details:
-            risk_metrics["sharpe"] = analysis_details["sharpe"]
-        if "kelly" in analysis_details:
-            risk_metrics["kelly"] = analysis_details["kelly"]
-        if "max_drawdown" in analysis_details:
-            risk_metrics["max_drawdown"] = analysis_details["max_drawdown"]
-            
+        if "sharpe" in analysis_details: #
+            risk_metrics["sharpe"] = analysis_details["sharpe"] #
+        if "kelly" in analysis_details: #
+            risk_metrics["kelly"] = analysis_details["kelly"] #
+        if "max_drawdown" in analysis_details: #
+            risk_metrics["max_drawdown"] = analysis_details["max_drawdown"] #
+
         # Add drawdown analysis for risk assessment
-        if drawdown_analysis:
-            risk_metrics["drawdown_analysis"] = drawdown_analysis
-            
+        if drawdown_analysis: #
+            risk_metrics["drawdown_analysis"] = drawdown_analysis #
             # Format key metrics for display
-            risk_metrics["max_drawdown_pct"] = f"{drawdown_analysis.get('max_drawdown', 0)*100:.1f}%"
-            risk_metrics["drawdown_count"] = drawdown_analysis.get('drawdown_count', 0)
-            risk_metrics["avg_recovery_time"] = f"{drawdown_analysis.get('avg_recovery_time', 0):.0f} days"
-            
+            risk_metrics["max_drawdown_pct"] = f"{drawdown_analysis.get('max_drawdown', 0)*100:.1f}%" #
+            risk_metrics["drawdown_count"] = drawdown_analysis.get('drawdown_count', 0) #
+            risk_metrics["avg_recovery_time"] = f"{drawdown_analysis.get('avg_recovery_time', 0):.0f} days" #
             # Calculate risk rating (1-5 scale)
-            dd_severity = abs(drawdown_analysis.get('max_drawdown', 0)) * 5  # 0-50% → 0-2.5
-            dd_frequency = min(1.0, drawdown_analysis.get('drawdown_frequency', 0) / 4)  # 0-4 → 0-1
-            recovery_factor = 1.0 - min(1.0, drawdown_analysis.get('recovery_resilience', 0.5))  # 0-1 → 1-0
-            
-            risk_rating = min(5, max(1, round((dd_severity + dd_frequency + recovery_factor) * 1.67)))
-            risk_metrics["risk_rating"] = risk_rating
-            risk_metrics["risk_level"] = ["Very Low", "Low", "Moderate", "High", "Very High"][risk_rating-1]
+            dd_severity = abs(drawdown_analysis.get('max_drawdown', 0)) * 5  # 0-50% → 0-2.5 #
+            dd_frequency = min(1.0, drawdown_analysis.get('drawdown_frequency', 0) / 4)  # 0-4 → 0-1 #
+            recovery_factor = 1.0 - min(1.0, drawdown_analysis.get('recovery_resilience', 0.5))  # 0-1 → 1-0 #
+            risk_rating = min(5, max(1, round((dd_severity + dd_frequency + recovery_factor) * 1.67))) #
+            risk_metrics["risk_rating"] = risk_rating #
+            risk_metrics["risk_level"] = ["Very Low", "Low", "Moderate", "High", "Very High"][risk_rating-1] #
 
         # Calculate price targets more explicitly for easy access
-        price_targets = {}
-        if predictions:
-            price_targets["price_target_30d"] = predictions["price_target_30d"]
-            price_targets["price_target_60d"] = predictions["price_target_60d"]
-            price_targets["expected_return_30d"] = f"{predictions['expected_return_30d']:.1f}%"
-            price_targets["expected_return_60d"] = f"{predictions['expected_return_60d']:.1f}%"
-            
+        price_targets = {} #
+        if predictions: #
+            price_targets["price_target_30d"] = predictions["price_target_30d"] #
+            price_targets["price_target_60d"] = predictions["price_target_60d"] #
+            price_targets["expected_return_30d"] = f"{predictions['expected_return_30d']:.1f}%" #
+            price_targets["expected_return_60d"] = f"{predictions['expected_return_60d']:.1f}%" #
             # Add band width metrics to assess prediction confidence
-            try:
-                price_30d = predictions["price_target_30d"]
-                band_width_30d = (predictions["upper_bound_68"][29] - predictions["lower_bound_68"][29]) / price_30d
-                price_targets["band_width_30d"] = f"±{band_width_30d*50:.1f}%"  # Convert to ± percentage
-                
-                price_60d = predictions["price_target_60d"]
-                band_width_60d = (predictions["upper_bound_68"][59] - predictions["lower_bound_68"][59]) / price_60d
-                price_targets["band_width_60d"] = f"±{band_width_60d*50:.1f}%"  # Convert to ± percentage
-                
+            try: #
+                price_30d = predictions["price_target_30d"] #
+                band_width_30d = (predictions["upper_bound_68"][29] - predictions["lower_bound_68"][29]) / price_30d #
+                price_targets["band_width_30d"] = f"±{band_width_30d*50:.1f}%"  # Convert to ± percentage #
+                price_60d = predictions["price_target_60d"] #
+                band_width_60d = (predictions["upper_bound_68"][59] - predictions["lower_bound_68"][59]) / price_60d #
+                price_targets["band_width_60d"] = f"±{band_width_60d*50:.1f}%"  # Convert to ± percentage #
                 # Add upside and downside potential
-                price_targets["upside_potential_30d"] = f"{((predictions['upper_bound_68'][29] / current_price) - 1) * 100:.1f}%"
-                price_targets["downside_risk_30d"] = f"{((predictions['lower_bound_68'][29] / current_price) - 1) * 100:.1f}%"
-            except (IndexError, KeyError) as e:
-                print(f"[WARNING] Could not calculate all band metrics: {e}")
+                price_targets["upside_potential_30d"] = f"{((predictions['upper_bound_68'][29] / current_price) - 1) * 100:.1f}%" #
+                price_targets["downside_risk_30d"] = f"{((predictions['lower_bound_68'][29] / current_price) - 1) * 100:.1f}%" #
+            except (IndexError, KeyError) as e: #
+                print(f"[WARNING] Could not calculate all band metrics: {e}") #
 
         # Create result dictionary with all components
         result = {
-            "symbol": symbol,
-            "price": current_price,
-            "sigma": sigma,
-            "recommendation": recommendation,
-            "company_info": company_info,
-            "quote_data": quote_data,
-            "analysis": analysis_details,
-            "predictions": predictions,
-            "plot_path": plot_path,
-            "risk_metrics": risk_metrics,
-            "price_targets": price_targets
+            "symbol": symbol, #
+            "price": current_price, #
+            "sigma": sigma, #
+            "recommendation": recommendation, #
+            "company_info": company_info, #
+            "quote_data": quote_data, #
+            "analysis": analysis_details, #
+            "predictions": predictions, #
+            "plot_path": plot_path, #
+            "risk_metrics": risk_metrics, #
+            "price_targets": price_targets, #
+            # --- NEW: Add the actual sentiment score (or None) to the results ---
+            "news_sentiment_score": sentiment_score
         }
 
         # Log summary of analysis
-        print(f"[INFO] Analysis for {symbol} completed successfully.")
-        print(f"       Sigma: {sigma:.3f}, Current Price: ${current_price:.2f}")
-        if predictions:
-            print(f"       30-Day Target: ${predictions['price_target_30d']:.2f} ({predictions['expected_return_30d']:.1f}%)")
-            print(f"       60-Day Target: ${predictions['price_target_60d']:.2f} ({predictions['expected_return_60d']:.1f}%)")
+        print(f"[INFO] Analysis for {symbol} completed successfully.") #
+        print(f"       Sigma: {sigma:.3f}, Current Price: ${current_price:.2f}") #
+        # --- NEW: Also log sentiment score ---
+        if sentiment_score is not None:
+             print(f"       News Sentiment: {sentiment_score:.4f}")
+        # --- End NEW ---
+        if predictions: #
+            print(f"       30-Day Target: ${predictions['price_target_30d']:.2f} ({predictions['expected_return_30d']:.1f}%)") #
+            print(f"       60-Day Target: ${predictions['price_target_60d']:.2f} ({predictions['expected_return_60d']:.1f}%)") #
 
         return result
-    except Exception as e:
-        print(f"[ERROR] Failed to analyze {symbol}: {e}")
-        traceback.print_exc()
+    except Exception as e: #
+        print(f"[ERROR] Failed to analyze {symbol}: {e}") #
+        traceback.print_exc() #
         return None
 
 # 2. Second modification: Enhanced drawdown analysis with adaptive factors
@@ -406,10 +414,11 @@ def analyze_drawdowns(df, window_size=180):  # Changed from 60 to 180 to match L
 import numpy as np
 import time
 import traceback
-from bloomberg import normalized_sentiment  # Assuming this is how you imported it
-
+# Modified calculate_sigma function (originally from semibloom.txt)
+# Note the added 'sentiment_score' argument
+# calculate_sigma function modified based on user request
 def calculate_sigma(data):
-    """Calculate comprehensive sigma metric using log returns-based mean reversion with normalized sentiment"""
+    """Calculate comprehensive sigma metric using log returns-based mean reversion with normalized sentiment (Modified: News sentiment adjustment applied post-calculation)"""
     try:
         # Set a maximum execution time for the entire function
         max_execution_time = 60000000  # 10 minutes max
@@ -456,7 +465,7 @@ def calculate_sigma(data):
                 print(f"[WARNING] PCA calculation failed: {e}, continuing without it")
                 pca_variance = []
         else:
-            print("[WARNING] Skipping PCA calculation due  due to significant time constraints")
+            print("[WARNING] Skipping PCA calculation due to significant time constraints")
 
         # 7. Get LSTM volatility prediction with log returns features
         lstm_prediction = 0
@@ -495,14 +504,14 @@ def calculate_sigma(data):
         # Calculate short-term momentum (last 10 days vs previous 10 days)
         try:
             if 'log_returns' in indicators_df.columns:
-                recent_returns = indicators_df['log_returns'].iloc[-10:].mean()
-                previous_returns = indicators_df['log_returns'].iloc[-20:-10].mean()
+                recent_returns_m = indicators_df['log_returns'].iloc[-10:].mean()
+                previous_returns_m = indicators_df['log_returns'].iloc[-20:-10].mean()
                 print("[INFO] Using log returns for momentum calculation")
             else:
-                recent_returns = indicators_df['returns'].iloc[-10:].mean()
-                previous_returns = indicators_df['returns'].iloc[-20:-10].mean()
+                recent_returns_m = indicators_df['returns'].iloc[-10:].mean()
+                previous_returns_m = indicators_df['returns'].iloc[-20:-10].mean()
 
-            momentum_signal = np.tanh((recent_returns - previous_returns) * 20)
+            momentum_signal = np.tanh((recent_returns_m - previous_returns_m) * 20)
             momentum_signal = (momentum_signal + 1) / 2  # Convert to 0-1 scale
         except:
             momentum_signal = 0.5  # Neutral
@@ -575,8 +584,9 @@ def calculate_sigma(data):
         cmf = (latest['CMF'] + 1) / 2 if 'CMF' in latest and not np.isnan(latest['CMF']) else 0.5
 
         # Assume normalized_sentiment is imported from bloomberg.py
-        sentiment_signal = normalized_sentiment if normalized_sentiment is not None else 0.5  # Default to neutral if unavailable
-        print(f"[INFO] Using normalized news sentiment: {sentiment_signal:.2f}")
+        # Retrieve news sentiment but don't include it in the initial component calculation
+        news_sentiment_value = normalized_sentiment if normalized_sentiment is not None else 0.5
+        print(f"[INFO] Using normalized news sentiment (for adjustment): {news_sentiment_value:.2f}")
 
         # Component groups for Sigma calculation
         momentum_components = {
@@ -588,15 +598,15 @@ def calculate_sigma(data):
             "williams_r": williams_r,
             "cmf": cmf,
             "lstm": lstm_prediction,
-            "dqn": dqn_recommendation,
-            "news_sentiment": sentiment_signal  # Added news sentiment
+            "dqn": dqn_recommendation
+            # "news_sentiment": news_sentiment_value # REMOVED from here
         }
 
         reversion_components = {
             "sma200_signal": sma200_signal,
             "bb_reversal": bb_reversal_signal,
             "accel_signal": accel_signal,
-            "mean_rev_signal": mean_rev_signal,
+            "mean_rev_signal": mean_rev_signal, # This was missing in original reversion score calc
             "rsi_div_signal": rsi_div_signal,
             "overbought_signal": overbought_signal,
             "vol_increase_signal": vol_increase_signal
@@ -605,42 +615,82 @@ def calculate_sigma(data):
         print(f"[DEBUG] Momentum components: {momentum_components}")
         print(f"[DEBUG] Mean reversion components: {reversion_components}")
 
-        # Calculate momentum score (bullish when high)
-        if lstm_prediction > 0 and dqn_recommendation != 0.5:
-            momentum_score = (
-                0.15 * momentum_components["traditional_volatility"] +
-                0.10 * momentum_components["rsi"] +
-                0.10 * momentum_components["macd"] +
-                0.10 * momentum_components["sma_trend"] +
-                0.10 * momentum_components["momentum"] +
-                0.05 * momentum_components["williams_r"] +
-                0.05 * momentum_components["cmf"] +
-                0.15 * momentum_components["lstm"] +
-                0.15 * momentum_components["dqn"] +
-                0.05 * momentum_components["news_sentiment"]  # Weight for sentiment
+        # Calculate base momentum score (bullish when high) - renormalized weights
+        # Original total weight in 'if' was 1.0. Without news (0.13), it's 0.87.
+        # Original total weight in 'else' was 1.0. Without news (0.05), it's 0.95.
+
+        if lstm_prediction > 0 and dqn_recommendation != 0.500:
+            base_momentum_score = (
+                (0.14 / 0.87) * momentum_components["traditional_volatility"] + # ≈ 0.161
+                (0.07 / 0.87) * momentum_components["rsi"] +                   # ≈ 0.080
+                (0.06 / 0.87) * momentum_components["macd"] +                   # ≈ 0.069
+                (0.06 / 0.87) * momentum_components["sma_trend"] +              # ≈ 0.069
+                (0.08 / 0.87) * momentum_components["momentum"] +               # ≈ 0.092
+                (0.08 / 0.87) * momentum_components["williams_r"] +             # ≈ 0.092
+                (0.08 / 0.87) * momentum_components["cmf"] +                    # ≈ 0.092
+                (0.15 / 0.87) * momentum_components["lstm"] +                   # ≈ 0.172
+                (0.15 / 0.87) * momentum_components["dqn"]                      # ≈ 0.172
             )
         else:
-            momentum_score = (
-                0.20 * momentum_components["traditional_volatility"] +
-                0.15 * momentum_components["rsi"] +
-                0.15 * momentum_components["macd"] +
-                0.15 * momentum_components["sma_trend"] +
-                0.15 * momentum_components["momentum"] +
-                0.10 * momentum_components["williams_r"] +
-                0.05 * momentum_components["cmf"] +
-                0.05 * momentum_components["news_sentiment"]  # Weight for sentiment
+            base_momentum_score = (
+                (0.20 / 0.95) * momentum_components["traditional_volatility"] + # ≈ 0.211
+                (0.15 / 0.95) * momentum_components["rsi"] +                   # ≈ 0.158
+                (0.15 / 0.95) * momentum_components["macd"] +                   # ≈ 0.158
+                (0.15 / 0.95) * momentum_components["sma_trend"] +              # ≈ 0.158
+                (0.15 / 0.95) * momentum_components["momentum"] +               # ≈ 0.158
+                (0.10 / 0.95) * momentum_components["williams_r"] +             # ≈ 0.105
+                (0.05 / 0.95) * momentum_components["cmf"]                      # ≈ 0.053
             )
 
+        # Ensure base score is valid before adjustment
+        base_momentum_score = np.nan_to_num(base_momentum_score, nan=0.5) # Handle potential NaNs
+        base_momentum_score = max(0.0, min(1.0, base_momentum_score)) # Clamp base score
+
+        # --- Apply News Sentiment Adjustment ---
+        # Adjustment Logic (Example: Conditional Boost/Penalty)
+        positive_threshold = 0.7  # Tune this threshold
+        negative_threshold = 0.3  # Tune this threshold
+        adjustment_amount = 0.05 # Tune this amount - how much news impacts the score
+
+        final_momentum_score = base_momentum_score # Start with the base technical/model score
+
+        if news_sentiment_value > positive_threshold:
+            final_momentum_score += adjustment_amount
+            print(f"[INFO] Boosting momentum score by {adjustment_amount:.3f} due to positive news ({news_sentiment_value:.2f})")
+        elif news_sentiment_value < negative_threshold:
+            final_momentum_score -= adjustment_amount
+            print(f"[INFO] Penalizing momentum score by {adjustment_amount:.3f} due to negative news ({news_sentiment_value:.2f})")
+
+        # --- Final Step: Ensure Score is within [0, 1] range ---
+        final_momentum_score = max(0.0, min(1.0, final_momentum_score))
+
+        # Assign the adjusted score to the 'momentum_score' variable for later use
+        momentum_score = final_momentum_score
+        # --- End of News Adjustment Section ---
+
+
         # Calculate mean reversion score (bearish when high)
+        # Note: Added the missing mean_rev_signal component based on structure
         reversion_score = (
-            0.20 * reversion_components["sma200_signal"] +
+            0.1 * reversion_components["sma200_signal"] +
             0.15 * reversion_components["bb_reversal"] +
-            0.15 * reversion_components["accel_signal"] +
-            0.15 * reversion_components["mean_rev_signal"] +
+            0.2 * reversion_components["accel_signal"] +
+            0.15 * reversion_components["mean_rev_signal"] + # Added this component weight
             0.10 * reversion_components["rsi_div_signal"] +
             0.15 * reversion_components["overbought_signal"] +
             0.10 * reversion_components["vol_increase_signal"]
         )
+        # Normalize weights to sum to 1 (0.1 + 0.15 + 0.2 + 0.15 + 0.10 + 0.15 + 0.10 = 0.95)
+        # Divide each by 0.95 or adjust weights to sum to 1. Here we adjust:
+        reversion_score = (
+            0.10 * reversion_components["sma200_signal"] +       # Adjusted: 0.10 / 0.95 ≈ 0.105
+            0.16 * reversion_components["bb_reversal"] +       # Adjusted: 0.15 / 0.95 ≈ 0.158
+            0.21 * reversion_components["accel_signal"] +        # Adjusted: 0.20 / 0.95 ≈ 0.211
+            0.16 * reversion_components["mean_rev_signal"] +     # Adjusted: 0.15 / 0.95 ≈ 0.158
+            0.10 * reversion_components["rsi_div_signal"] +      # Adjusted: 0.10 / 0.95 ≈ 0.105
+            0.16 * reversion_components["overbought_signal"] +   # Adjusted: 0.15 / 0.95 ≈ 0.158
+            0.11 * reversion_components["vol_increase_signal"]   # Adjusted: 0.10 / 0.95 ≈ 0.105
+        ) # Sum approx 1.0
 
         # Get recent monthly return using log returns if available
         if 'log_returns' in indicators_df.columns:
@@ -654,13 +704,13 @@ def calculate_sigma(data):
         # Adjust balance factor based on Hurst exponent
         hurst_adjustment = 0
         if hurst_info['hurst'] < 0.4:
-            hurst_adjustment = 0.15
+            hurst_adjustment = 0.05
         elif hurst_info['hurst'] < 0.45:
             hurst_adjustment = 0.1
         elif hurst_info['hurst'] > 0.65:
-            hurst_adjustment = -0.15
+            hurst_adjustment = -0.10
         elif hurst_info['hurst'] > 0.55:
-            hurst_adjustment = -0.1
+            hurst_adjustment = -0.05
 
         base_balance_factor = 0.5 + hurst_adjustment
 
@@ -670,30 +720,32 @@ def calculate_sigma(data):
 
         mr_speed_adjustment = 0
         if -1 < beta < -0.5:
-            mr_speed_adjustment = 0.1
-        elif -0.5 < beta < -0.2:
             mr_speed_adjustment = 0.05
+        elif -0.5 < beta < -0.2:
+            mr_speed_adjustment = 0.025
         elif beta > 0.2:
-            mr_speed_adjustment = -0.05
+            mr_speed_adjustment = -0.03
 
         if 0 < half_life < 10:
-            mr_speed_adjustment += 0.05
+            mr_speed_adjustment += 0.03
         elif 10 <= half_life < 30:
-            mr_speed_adjustment += 0.025
+            mr_speed_adjustment += 0.015
 
         base_balance_factor += mr_speed_adjustment
         print(f"[INFO] Mean reversion adjustment based on beta/half-life: {mr_speed_adjustment:.3f}")
 
+        # --- REMOVED NEWS ADJUSTMENT FROM BALANCE FACTOR ---
         # Adjust based on news sentiment (extreme sentiment increases mean reversion weight)
-        sentiment_adjustment = 0
-        if sentiment_signal > 0.8:  # Very positive sentiment
-            sentiment_adjustment = 0.05  # Slightly more weight to mean reversion
-            print(f"[INFO] Increasing mean reversion weight due to high news sentiment: {sentiment_signal:.2f}")
-        elif sentiment_signal < 0.2:  # Very negative sentiment
-            sentiment_adjustment = 0.05  # Slightly more weight to mean reversion
-            print(f"[INFO] Increasing mean reversion weight due to low news sentiment: {sentiment_signal:.2f}")
+        # sentiment_adjustment = 0
+        # if news_sentiment_value > 0.8:  # Very positive sentiment
+        #     sentiment_adjustment = 0.05  # Slightly more weight to mean reversion
+        #     print(f"[INFO] Increasing mean reversion weight due to high news sentiment: {news_sentiment_value:.2f}")
+        # elif news_sentiment_value < 0.2:  # Very negative sentiment
+        #     sentiment_adjustment = 0.05  # Slightly more weight to mean reversion
+        #     print(f"[INFO] Increasing mean reversion weight due to low news sentiment: {news_sentiment_value:.2f}")
+        # base_balance_factor += sentiment_adjustment
+        # --- END REMOVED SECTION ---
 
-        base_balance_factor += sentiment_adjustment
 
         # For stocks with recent large moves, increase the mean reversion weight
         if recent_returns > 0.15:
@@ -728,7 +780,7 @@ def calculate_sigma(data):
 
         # Calculate final sigma with balanced approach
         ensemble_result = create_ensemble_prediction(
-            momentum_score,
+            momentum_score, # Use the news-adjusted momentum score
             reversion_score,
             lstm_prediction,
             dqn_recommendation,
@@ -743,6 +795,7 @@ def calculate_sigma(data):
             weights = ensemble_result["weights"]
             print(f"[INFO] Using ensemble model with weights: {weights}")
         else:
+            # Use news-adjusted momentum score here
             sigma = momentum_score * (1 - balance_factor) + (1 - reversion_score) * balance_factor
 
         # Add small PCA adjustment if available
@@ -761,14 +814,14 @@ def calculate_sigma(data):
         final_sigma = max(0, min(1, final_sigma))
 
         print(
-            f"[INFO] Final components: Momentum={momentum_score:.3f}, Reversion={reversion_score:.3f}, Balance={balance_factor:.2f}, Sigma={sigma:.3f}, Final Sigma={final_sigma:.3f}"
+            f"[INFO] Final components: Momentum(Adj)={momentum_score:.3f}, Reversion={reversion_score:.3f}, Balance={balance_factor:.2f}, Base Sigma={sigma:.3f}, Final Sigma={final_sigma:.3f}"
         )
 
         # Analysis details
         analysis_details = {
             "sigma": final_sigma,
             "raw_sigma": sigma,
-            "momentum_score": momentum_score,
+            "momentum_score": momentum_score, # Store the adjusted momentum score
             "reversion_score": reversion_score,
             "balance_factor": balance_factor,
             "recent_monthly_return": recent_returns,
@@ -780,7 +833,7 @@ def calculate_sigma(data):
             "last_price": latest['4. close'] if not np.isnan(latest['4. close']) else 0,
             "lstm_prediction": lstm_prediction,
             "dqn_recommendation": dqn_recommendation,
-            "news_sentiment": sentiment_signal,  # Added news sentiment
+            "news_sentiment": news_sentiment_value, # Store the raw news sentiment used for adjustment
             "hurst_exponent": hurst_info['hurst'],
             "hurst_regime": hurst_info['regime'],
             "mean_reversion_half_life": half_life_info['half_life'],
@@ -794,6 +847,8 @@ def calculate_sigma(data):
             "kelly": risk_metrics.get("kelly", 0),
             "sharpe": risk_metrics.get("sharpe", 0)
         }
+        # Merge risk metrics properly
+        analysis_details.update(risk_metrics)
 
         return analysis_details
     except Exception as e:
